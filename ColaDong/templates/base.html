@@ -1,0 +1,66 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Cola Dong{% endblock %}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="{% static 'css/coladong.css' %}">
+</head>
+<body>
+
+{% comment %}
+  Header. Shown on every page. `request.resolver_match.url_name` is used to mark
+  the current tab, so no extra context variable is needed for navigation.
+{% endcomment %}
+<header class="masthead">
+  <div class="masthead__inner">
+    <a class="brand" href="{% url 'balances' %}">Cola <span>Dong</span></a>
+
+    {% if user.is_authenticated %}
+      {% with here=request.resolver_match.url_name %}
+      <nav class="nav" aria-label="Main">
+        <a href="{% url 'balances' %}"   {% if here == 'balances' %}aria-current="page"{% endif %}>Balances</a>
+        <a href="{% url 'records' %}"    {% if here == 'records' %}aria-current="page"{% endif %}>Payments</a>
+        <a href="{% url 'add_record' %}" {% if here == 'add_record' %}aria-current="page"{% endif %}>Record a payment</a>
+        <a href="{% url 'group_buy' %}"  {% if here == 'group_buy' %}aria-current="page"{% endif %}>Split a purchase</a>
+      </nav>
+      {% endwith %}
+
+      <div class="session">
+        <span class="session__who">{{ user.username }}</span>
+        <form method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button type="submit" class="btn--link">Sign out</button>
+        </form>
+      </div>
+    {% else %}
+      <div class="session" style="margin-left:auto">
+        <a class="btn" href="{% url 'login' %}">Sign in</a>
+      </div>
+    {% endif %}
+  </div>
+</header>
+
+<main>
+  <div class="wrap {% block wrapmod %}{% endblock %}">
+
+    {% comment %} Works with either django.contrib.messages or a plain `error` string. {% endcomment %}
+    {% if messages %}
+      {% for message in messages %}
+        <div class="flash {% if message.tags == 'error' %}flash--error{% endif %}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+    {% if error %}<div class="flash flash--error">{{ error }}</div>{% endif %}
+
+    {% block content %}{% endblock %}
+  </div>
+</main>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

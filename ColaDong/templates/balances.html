@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Balances · Cola Dong{% endblock %}
+
+{% block content %}
+
+<div class="pagehead">
+  <h1>Where you stand</h1>
+  <p>Red figures in parentheses are what you owe. Plain figures are what you're owed.</p>
+</div>
+
+{% comment %}
+  Context needed:
+    balances     list of rows, each with:
+                   .username  str
+                   .name      str, optional display name (falls back to username)
+                   .balance   signed int — POSITIVE means they owe you,
+                              NEGATIVE means you owe them, 0 means settled
+    net_balance  signed int, same convention
+  Rows with .balance == 0 are fine to include or leave out; both render sensibly.
+{% endcomment %}
+
+<div class="sheet">
+  {% if balances %}
+  <div class="scroll-x">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th scope="col">Person</th>
+          <th scope="col">Direction</th>
+          <th scope="col" class="num">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in balances %}
+        <tr>
+          <td class="who">
+            {{ row.name|default:row.username }}
+            {% if row.name %}<small>{{ row.username }}</small>{% endif %}
+          </td>
+
+          <td class="dir">
+            {% if row.balance < 0 %}you owe
+            {% elif row.balance > 0 %}owes you
+            {% else %}settled{% endif %}
+          </td>
+
+          <td class="num">
+            {% if row.balance < 0 %}
+              <span class="money money--owe">(${{ row.balance|intcomma|cut:"-" }})</span>
+            {% elif row.balance > 0 %}
+              <span class="money">${{ row.balance|intcomma }}</span>
+            {% else %}
+              <span class="money settled">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2">Net position</td>
+          <td class="num">
+            {% if net_balance < 0 %}
+              <span class="money money--owe">(${{ net_balance|intcomma|cut:"-" }})</span>
+            {% elif net_balance > 0 %}
+              <span class="money">${{ net_balance|intcomma }}</span>
+            {% else %}
+              <span class="money settled">$0</span>
+            {% endif %}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="sheet__foot">
+    <a class="btn" href="{% url 'add_record' %}">Record a payment</a>
+    <a class="btn btn--quiet" href="{% url 'group_buy' %}">Split a purchase</a>
+  </div>
+
+  {% else %}
+  <div class="empty">
+    <p>Nothing on the tab yet.</p>
+    <a class="btn" href="{% url 'add_record' %}">Record the first payment</a>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

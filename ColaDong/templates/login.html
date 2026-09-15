@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in · Cola Dong{% endblock %}
+
+{% block content %}
+<div class="signin">
+
+  <span class="brand">Cola <span>Dong</span></span>
+  <p class="signin__note">The running tab for you and your friends.</p>
+
+  {% comment %}
+    `error` is already rendered by base.html, above this block.
+    POST fields: username, password (+ next, if you passed one in).
+    On success, redirect to `next` or to the balances page.
+  {% endcomment %}
+
+  <form method="post" action="{% url 'login' %}" novalidate>
+    {% csrf_token %}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+
+    <div class="field">
+      <label for="id_username">Username</label>
+      <input type="text" id="id_username" name="username"
+             value="{{ username|default:'' }}"
+             autocomplete="username" autocapitalize="none" autofocus required>
+    </div>
+
+    <div class="field">
+      <label for="id_password">Password</label>
+      <input type="password" id="id_password" name="password"
+             autocomplete="current-password" required>
+    </div>
+
+    <button type="submit" class="btn">Sign in</button>
+  </form>
+
+</div>
+{% endblock %}

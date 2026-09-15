@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Record a payment · Cola Dong{% endblock %}
+{% block wrapmod %}wrap--narrow{% endblock %}
+
+{% block content %}
+
+<div class="pagehead">
+  <h1>Record a payment</h1>
+  <p>Money you paid to someone. They'll owe you that much less, or you'll owe them that much more.</p>
+</div>
+
+{% comment %}
+  Context needed:
+    users    iterable of the other users. Each item needs .username, optionally .name
+    form     optional dict of previously submitted values, to refill after an error:
+             form.receiver, form.date, form.amount, form.note
+    today    today as a STRING, e.g. date.today().isoformat()
+
+  POST fields: receiver, date (YYYY-MM-DD), amount (int), note
+  On success redirect to the balances page; on failure re-render with `error`.
+{% endcomment %}
+
+<form method="post" action="{% url 'add_record' %}" novalidate>
+  {% csrf_token %}
+
+  <div class="sheet">
+    <div class="sheet__body">
+
+      <div class="field">
+        <label for="id_receiver">Paid to</label>
+        <select id="id_receiver" name="receiver" required>
+          <option value="">Choose a person…</option>
+          {% for u in users %}
+            <option value="{{ u.username }}"
+              {% if form.receiver == u.username %}selected{% endif %}>
+              {{ u.name|default:u.username }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label for="id_amount">Amount</label>
+          <div class="amount-input">
+            <span>$</span>
+            <input type="number" id="id_amount" name="amount"
+                   value="{{ form.amount|default:'' }}"
+                   min="1" max="999999" step="1" inputmode="numeric"
+                   placeholder="0" required>
+          </div>
+          <span class="hint">Whole dollars, $1 to $999,999.</span>
+        </div>
+
+        <div class="field">
+          <label for="id_date">Date</label>
+          <input type="date" id="id_date" name="date"
+                 value="{{ form.date|default:today }}" required>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="id_note">Note <span class="hint" style="display:inline">optional</span></label>
+        <textarea id="id_note" name="note" maxlength="200"
+                  placeholder="What it was for">{{ form.note|default:'' }}</textarea>
+      </div>
+
+    </div>
+
+    <div class="sheet__foot">
+      <button type="submit" class="btn">Save payment</button>
+      <a class="btn--link" href="{% url 'balances' %}">Cancel</a>
+    </div>
+  </div>
+</form>
+
+{% endblock %}

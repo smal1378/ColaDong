@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}Payments · Cola Dong{% endblock %}
+
+{% block content %}
+
+<div class="pagehead">
+  <h1>Payments</h1>
+  <p>Every payment recorded by the group, newest first.</p>
+</div>
+
+{% comment %}
+  Context needed:
+    users    iterable for the two dropdowns; each item needs .username, optionally .name
+    records  iterable, each with .date (date), .sender, .receiver (str or User),
+             .amount (int), .note (str or empty)
+    filters  dict of the currently applied filter values, so the form can refill:
+             filters.sender, filters.receiver, filters.date_from, filters.date_to
+             (empty dict on first load is fine)
+    total_amount  optional int — sum of the filtered records
+
+  The filter form POSTs back to this same URL with:
+    sender, receiver, date_from, date_to
+  Any of them may be an empty string, meaning "no constraint".
+{% endcomment %}
+
+<div class="sheet">
+
+  <form method="post" action="{% url 'records' %}" class="filters">
+    {% csrf_token %}
+
+    <div class="field">
+      <label for="f_sender">Paid by</label>
+      <select id="f_sender" name="sender">
+        <option value="">Anyone</option>
+        {% for u in users %}
+          <option value="{{ u.username }}" {% if filters.sender == u.username %}selected{% endif %}>
+            {{ u.name|default:u.username }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="f_receiver">Paid to</label>
+      <select id="f_receiver" name="receiver">
+        <option value="">Anyone</option>
+        {% for u in users %}
+          <option value="{{ u.username }}" {% if filters.receiver == u.username %}selected{% endif %}>
+            {{ u.name|default:u.username }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="f_from">From</label>
+      <input type="date" id="f_from" name="date_from" value="{{ filters.date_from|default:'' }}">
+    </div>
+
+    <div class="field">
+      <label for="f_to">To</label>
+      <input type="date" id="f_to" name="date_to" value="{{ filters.date_to|default:'' }}">
+    </div>
+
+    <div class="filters__actions">
+      <button type="submit" class="btn">Apply filters</button>
+      {% if filters.sender or filters.receiver or filters.date_from or filters.date_to %}
+        <a class="btn--link" href="{% url 'records' %}">Clear all</a>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if records %}
+  <div class="scroll-x">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th scope="col">Date</th>
+          <th scope="col">Paid by</th>
+          <th scope="col">Paid to</th>
+          <th scope="col">Note</th>
+          <th scope="col" class="num">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+        <tr>
+          <td class="when">{{ r.date|date:"Y-m-d" }}</td>
+          <td class="who">{{ r.sender }}</td>
+          <td class="who">{{ r.receiver }}</td>
+          <td class="memo">{{ r.note|default:"—" }}</td>
+          <td class="num"><span class="money">${{ r.amount|intcomma }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="4">
+            {{ records|length }} payment{{ records|length|pluralize }}
+            {% if filters.sender or filters.receiver or filters.date_from or filters.date_to %}matching these filters{% endif %}
+          </td>
+          <td class="num">
+            {% if total_amount %}<span class="money">${{ total_amount|intcomma }}</span>{% endif %}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  {% else %}
+  <div class="empty">
+    {% if filters.sender or filters.receiver or filters.date_from or filters.date_to %}
+      <p>No payments match these filters. Widen the dates or clear one of them.</p>
+    {% else %}
+      <p>No payments recorded yet.</p>
+      <a class="btn" href="{% url 'add_record' %}">Record the first payment</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</div>
+
+{% endblock %}

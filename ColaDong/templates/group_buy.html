@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}Split a purchase · Cola Dong{% endblock %}
+
+{% block content %}
+
+<div class="pagehead">
+  <h1>Split a purchase</h1>
+  <p>One person paid, several people share the cost. Give someone a bigger multiplier if they took a bigger share.</p>
+</div>
+
+{% comment %}
+  Context needed:
+    users   iterable of ALL users including the person signed in.
+            Each item needs .username, optionally .name.
+            To refill the list after a failed submit, also set on each item:
+              .selected  True if their box was checked
+              .weight    the multiplier they had (defaults to 1)
+            A plain list of dicts is easiest here.
+    form    optional dict to refill the top fields after an error:
+              form.payer, form.amount, form.date, form.note
+    today   today as a STRING, e.g. date.today().isoformat()
+
+  POST fields:
+    payer          one username
+    amount         int, whole dollars
+    date           YYYY-MM-DD
+    note           optional
+    participants   repeated field — one value per checked username
+    weight_USERNAME    one per checked username, e.g. weight_sara = "2"
+
+  Read it like this:
+
+    names   = request.POST.getlist("participants")
+    weights = {n: Decimal(request.POST.get("weight_" + n) or "1") for n in names}
+
+  Each person owes the payer  amount * weight / sum(weights).  The page previews
+  that split with whole dollars using largest-remainder rounding, so whatever
+  rounding rule you pick on the server, tell me and I'll match it here.
+{% endcomment %}
+
+<form method="post" action="{% url 'group_buy' %}" novalidate>
+  {% csrf_token %}
+
+  <div class="sheet">
+    <div class="sheet__body">
+
+      <div class="row2">
+        <div class="field">
+          <label for="id_payer">Paid by</label>
+          <select id="id_payer" name="payer" required>
+            {% for u in users %}
+              <option value="{{ u.username }}"
+                {% if form.payer %}{% if form.payer == u.username %}selected{% endif %}
+                {% elif u.username == user.username %}selected{% endif %}>
+                {{ u.name|default:u.username }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="id_amount">Total paid</label>
+          <div class="amount-input">
+            <span>$</span>
+            <input type="number" id="id_amount" name="amount"
+                   value="{{ form.amount|default:'' }}"
+                   min="1" max="999999" step="1" inputmode="numeric"
+                   placeholder="0" required>
+          </div>
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label for="id_date">Date</label>
+          <input type="date" id="id_date" name="date"
+                 value="{{ form.date|default:today }}" required>
+        </div>
+
+        <div class="field">
+          <label for="id_note">Note <span class="hint" style="display:inline">optional</span></label>
+          <input type="text" id="id_note" name="note" maxlength="200"
+                 value="{{ form.note|default:'' }}" placeholder="Pizza, tickets, groceries…">
+        </div>
+      </div>
+
+      <fieldset class="fieldset">
+        <legend>Who shares the cost</legend>
+
+        <div class="split">
+          {% for u in users %}
+          <div class="split__row" data-on="0">
+            <label class="split__who">
+              <input type="checkbox" name="participants" value="{{ u.username }}"
+                     {% if u.selected %}checked{% endif %}>
+              <span>
+                {{ u.name|default:u.username }}
+                {% if u.username == user.username %}<em>you</em>{% endif %}
+              </span>
+            </label>
+
+            <span class="weight">
+              <input type="number" name="weight_{{ u.username }}"
+                     value="{{ u.weight|default:1 }}"
+                     min="0.5" max="20" step="0.5"
+                     aria-label="Share multiplier for {{ u.username }}">
+              <span>&times;</span>
+            </span>
+
+            <span class="share share--off">&mdash;</span>
+          </div>
+          {% endfor %}
+        </div>
+
+        <div class="split__total">
+          <span id="split-count" class="memo">Nobody selected yet</span>
+          <span id="split-check" class="money"></span>
+        </div>
+      </fieldset>
+
+    </div>
+
+    <div class="sheet__foot">
+      <button type="submit" class="btn">Save split</button>
+      <button type="button" class="btn btn--quiet" id="pick-all">Select everyone</button>
+      <button type="button" class="btn--link" id="pick-none">Clear selection</button>
+    </div>
+  </div>
+</form>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+(function () {
+  var amount   = document.getElementById('id_amount');
+  var rows     = Array.prototype.slice.call(document.querySelectorAll('.split__row'));
+  var countEl  = document.getElementById('split-count');
+  var checkEl  = document.getElementById('split-check');
+
+  function dollars(n) { return '$' + n.toLocaleString('en-US'); }
+
+  function recalc() {
+    var total  = parseInt(amount.value, 10) || 0;
+    var active = [];
+
+    rows.forEach(function (row) {
+      var box    = row.querySelector('input[type=checkbox]');
+      var weight = row.querySelector('.weight input');
+      var share  = row.querySelector('.share');
+
+      weight.disabled = !box.checked;
+      row.setAttribute('data-on', box.checked ? '1' : '0');
+      share.classList.toggle('share--off', !box.checked);
+
+      if (box.checked) {
+        active.push({ share: share, w: Math.max(parseFloat(weight.value) || 0, 0) });
+      } else {
+        share.innerHTML = '&mdash;';
+      }
+    });
+
+    var sumW = active.reduce(function (a, p) { return a + p.w; }, 0);
+
+    if (!active.length) {
+      countEl.textContent = 'Nobody selected yet';
+      checkEl.textContent = '';
+      return;
+    }
+
+    var shares = sumW % 1 === 0 ? sumW : sumW.toFixed(1);
+    countEl.textContent = active.length + ' sharing, ' + shares + ' shares in total';
+
+    if (!sumW || !total) {
+      active.forEach(function (p) { p.share.innerHTML = '&mdash;'; });
+      checkEl.textContent = '';
+      return;
+    }
+
+    // Largest-remainder rounding, so the parts always add back up to the total.
+    var exact = active.map(function (p) { return total * p.w / sumW; });
+    var parts = exact.map(Math.floor);
+    var left  = total - parts.reduce(function (a, b) { return a + b; }, 0);
+    var order = exact
+      .map(function (v, i) { return [v - parts[i], i]; })
+      .sort(function (a, b) { return b[0] - a[0]; });
+
+    for (var i = 0; i < left; i++) { parts[order[i % order.length][1]] += 1; }
+
+    active.forEach(function (p, i) { p.share.textContent = dollars(parts[i]); });
+    checkEl.textContent = 'Adds up to ' + dollars(total);
+  }
+
+  document.addEventListener('input', function (e) {
+    if (e.target.closest('.split') || e.target === amount) { recalc(); }
+  });
+  document.addEventListener('change', function (e) {
+    if (e.target.closest('.split')) { recalc(); }
+  });
+
+  function setAll(state) {
+    rows.forEach(function (row) { row.querySelector('input[type=checkbox]').checked = state; });
+    recalc();
+  }
+  document.getElementById('pick-all').addEventListener('click', function () { setAll(true); });
+  document.getElementById('pick-none').addEventListener('click', function () { setAll(false); });
+
+  recalc();
+})();
+</script>
+{% endblock %}
