@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "django", specifier = ">=3.2.25" }]
+requires-dist = [{ name = "django", specifier = "~=6.1" }]
 
 [[package]]
 name = "django"
