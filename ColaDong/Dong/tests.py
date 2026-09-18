@@ -47,7 +47,7 @@ class AuthTests(TestCase):
     def test_login_rejects_bad_password(self):
         User.objects.create_user("alice", password="pw")
         response = self.client.post(reverse("login"), {"username": "alice", "password": "wrong"})
-        self.assertContains(response, "error")
+        self.assertContains(response, "Please enter a correct username and password")
 
     def test_login_then_logout(self):
         User.objects.create_user("alice", password="pw")
@@ -139,6 +139,87 @@ class GroupBuyTests(TestCase):
         response = self.post_split(participants=["alice"])
         self.assertContains(response, "at least one other person")
         self.assertEqual(GroupPurchase.objects.count(), 0)
+
+
+class AddRecordTests(TestCase):
+    def setUp(self):
+        self.alice = User.objects.create_user("alice", password="pw")
+        self.bob = User.objects.create_user("bob", password="pw")
+        self.client.login(username="alice", password="pw")
+
+    def post_record(self, **overrides):
+        data = {"receiver": "bob", "amount": "100", "date": "2026-09-18", "note": "Dinner"}
+        data.update(overrides)
+        return self.client.post(reverse("add_record"), data)
+
+    def test_valid_payment_saved_and_redirects(self):
+        response = self.post_record()
+        self.assertRedirects(response, reverse("balances"))
+        payment = Payment.objects.get()
+        self.assertEqual(payment.sender, self.alice)
+        self.assertEqual(payment.receiver, self.bob)
+        self.assertEqual(payment.amount, 100)
+
+    def test_sender_is_always_the_signed_in_user(self):
+        """A crafted receiver can't change who paid."""
+        self.post_record()
+        self.assertEqual(Payment.objects.get().sender, self.alice)
+
+    def test_self_payment_rejected(self):
+        response = self.post_record(receiver="alice")
+        self.assertContains(response, "Select a valid choice")
+        self.assertEqual(Payment.objects.count(), 0)
+
+    def test_bad_amount_rejected(self):
+        cases = {
+            "0": "greater than or equal to 1",
+            "-5": "greater than or equal to 1",
+            "abc": "Enter a whole number",
+            "1000000": "less than or equal to 999999",
+        }
+        for amount, fragment in cases.items():
+            with self.subTest(amount=amount):
+                response = self.post_record(amount=amount)
+                self.assertContains(response, fragment)
+        self.assertEqual(Payment.objects.count(), 0)
+
+    def test_refill_after_error(self):
+        response = self.post_record(amount="0")
+        self.assertContains(response, ">Dinner<")
+
+
+class RecordsFilterTests(TestCase):
+    def setUp(self):
+        self.alice = User.objects.create_user("alice", password="pw")
+        self.bob = User.objects.create_user("bob", password="pw")
+        Payment.objects.create(sender=self.alice, receiver=self.bob, amount=50, date="2026-09-01", note="a")
+        Payment.objects.create(sender=self.bob, receiver=self.alice, amount=70, date="2026-09-15", note="b")
+        self.client.login(username="alice", password="pw")
+
+    def test_filter_by_sender(self):
+        response = self.client.post(reverse("records"), {"sender": "alice", "receiver": "", "date_from": "", "date_to": ""})
+        self.assertContains(response, "a")
+        self.assertNotContains(response, "note b")
+        self.assertContains(response, "matching these filters")
+
+    def test_filter_by_date_range(self):
+        response = self.client.post(
+            reverse("records"),
+            {"sender": "", "receiver": "", "date_from": "2026-09-10", "date_to": "2026-09-20"},
+        )
+        self.assertContains(response, "b")
+        self.assertNotContains(response, "note a")
+
+    def test_inverted_dates_rejected(self):
+        response = self.client.post(
+            reverse("records"),
+            {"sender": "", "receiver": "", "date_from": "2026-09-20", "date_to": "2026-09-01"},
+        )
+        self.assertContains(response, "start date is after the end date")
+
+    def test_total_amount(self):
+        response = self.client.get(reverse("records"))
+        self.assertContains(response, "$120")
 
 
 class PageTests(TestCase):

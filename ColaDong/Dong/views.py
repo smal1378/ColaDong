@@ -12,7 +12,7 @@ from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import CreateView, TemplateView
 
-from .forms import GroupBuyForm, PaymentForm, RecordFilterForm, refill_dict
+from .forms import GroupBuyForm, PaymentForm, RecordFilterForm, flatten_errors, refill_dict
 from .models import GroupPurchase, Payment
 from .services import compute_balances, split_amount
 
@@ -22,7 +22,7 @@ class FlatErrorMixin:
 
     def form_invalid(self, form):
         context = self.get_context_data(form=form)
-        context["error"] = " ".join(form.non_field_errors())
+        context["error"] = flatten_errors(form)
         return self.render_to_response(context)
 
 
@@ -62,7 +62,7 @@ class RecordsView(LoginRequiredMixin, View):
     def post(self, request):
         form = RecordFilterForm(request.POST)
         if not form.is_valid():
-            messages.error(request, " ".join(form.errors.flat()))
+            messages.error(request, flatten_errors(form))
         filters = {name: request.POST.get(name, "") for name in self.filter_names}
         return self._render(request, form=form, filters=filters)
 
@@ -103,7 +103,7 @@ class GroupBuyView(LoginRequiredMixin, View):
         weights = {n: request.POST.get(f"weight_{n}") or "1" for n in names}
 
         if not form.is_valid():
-            error = " ".join(form.errors.flat())
+            error = flatten_errors(form)
         elif not names:
             error = "Tick at least one person to share the cost with."
         else:

@@ -12,6 +12,7 @@ class PaymentForm(forms.ModelForm):
         queryset=User.objects.all(),
         to_field_name="username",
     )
+    amount = forms.IntegerField(min_value=1, max_value=999_999)
 
     class Meta:
         model = Payment
@@ -65,3 +66,9 @@ def refill_dict(form, *names):
     """The templates expect a plain dict of submitted values to refill
     inputs, not a Django form object."""
     return {name: form.data.get(name, "") for name in names}
+
+
+def flatten_errors(form):
+    """Every field error and non-field error, joined into the single
+    `error` string the templates render in base.html."""
+    return " ".join(msg for errors in form.errors.values() for msg in errors)
