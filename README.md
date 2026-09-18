@@ -2,6 +2,8 @@
 
 A private shared ledger for a friend group, built with Django.
 
+- Note: I've (Esmail) created this project using AI Agents to try it out, and also may use the project.
+
 If Alice pays Bob $100, it's recorded, and Bob now owes Alice $100. If Bob
 then pays Carl $100, Carl owes Bob instead. The app tracks who owes whom
 what, shows each person's running balance, and can split a group purchase
