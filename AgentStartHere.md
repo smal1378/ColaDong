@@ -30,9 +30,9 @@ Recording a payment by Alice to Bob creates a row where
 - The frontend (6 templates in `ColaDong/templates/` +
   `static/css/coladong.css`) was written by Claude and is **complete**.
   Treat the templates as a fixed contract.
-- `README.md` (currently a 2-line stub, rewrite pending) and
-  `BACKEND_GUIDE.md` (a teaching walkthrough, deliberately stops short of
-  finished code) document the original plan.
+- `README.md` (project overview + setup), `README_UI.md` (the frontend
+  handoff contract) and `BACKEND_GUIDE.md` (a teaching walkthrough,
+  deliberately stops short of finished code) document the plan.
 - The visual language: greenbar accounting sheet — pale alternating rows,
   hairline rules, right-aligned monospaced figures, `3px double` rules only
   where something totals up. Debts render red in parentheses
@@ -76,6 +76,8 @@ ColaDong/                     <- repo root (git lives here)
     static/css/coladong.css
   CONTEXT.md                  why things are shaped this way
   BACKEND_GUIDE.md            original build walkthrough
+  README_UI.md                frontend handoff contract
+  Decisions.md                implementation decision log
   RETURN.txt                  sync flag (see §8)
   AgentStartHere.md           <- you are here
 ```
@@ -142,21 +144,16 @@ POST field names:
    `views.py` (BalancesView, AddRecordView, RecordsView, GroupBuyView),
    `tests.py` — test suite green at commit time (18 tests)
 6. `da62601` `RETURN.txt` flag file
-
-### In progress / pending (uncommitted)
-- `tests.py` expanded with `AddRecordTests` and `RecordsFilterTests` and
-  tighter assertions (replaced fragile `assertContains(…, "error")` with
-  actual error-message fragments). **Not yet run/committed** — a test run
-  was interrupted. First job for a new agent: run
-  `uv run python manage.py test Dong` and fix anything red.
+7. `cb76ef4` fixed form-error flattening (`flatten_errors` in `forms.py`;
+   `form.errors.flat()` doesn't exist on `ErrorDict`, and
+   `FlatErrorMixin` was only flattening non-field errors), declared
+   `PaymentForm.amount` explicitly (`min_value=1` — a
+   `PositiveIntegerField`'s form field otherwise gets `min_value=0`),
+   added `AddRecordTests` + `RecordsFilterTests` (27 tests, green), and
+   this file
+8. `3562470` `Decisions.md` + `README.md` rewrite
 
 ### Not started
-- `Decisions.md` — log of significant architectural decisions for the
-  owner to review (planned content: services.py separation,
-  `to_field_name="username"`, largest-remainder parity, flat-error-string
-  pattern, `get_form_kwargs` sender injection, skipping the payer's own
-  share row, POST-based filters).
-- `README.md` rewrite (currently a stub).
 - A "features pass" the owner asked for once the core is stable
   (ideas floated: settle-up suggestions on balances, monthly stats).
   Owner is out of town; see §8 before starting new features.
@@ -173,7 +170,8 @@ commit). If its content changes to `True` or any "I'm back" text:
 ## 9. Open questions for the owner
 
 1. Features pass: which ideas (settle-up suggestions? stats? pagination?)
-2. `Decisions.md` and `README.md` — approve the planned content?
+2. Review `Decisions.md` and the rewritten `README.md` — written, awaiting
+   the owner's sign-off.
 3. The records filter form POSTs (not GET) so filtered URLs aren't
    bookmarkable — switch to GET? (small contained change)
 4. Django 6.0's `SECURE_CSP` exists but is off; `group_buy.html` has an
