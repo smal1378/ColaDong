@@ -1,7 +1,7 @@
 [project]
 name = "coladong"
 version = "0.1.0"
-description = "Add your description here"
+    description = "Cola Dong — a shared lending ledger for a friend group"
 requires-python = ">=3.13"
 dependencies = [
     "django~=6.1",
