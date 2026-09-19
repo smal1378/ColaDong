@@ -81,6 +81,7 @@
           <th scope="col">Paid by</th>
           <th scope="col">Paid to</th>
           <th scope="col">Note</th>
+          <th scope="col">IP</th>
           <th scope="col" class="num">Amount</th>
         </tr>
       </thead>
@@ -91,13 +92,14 @@
           <td class="who">{{ r.sender }}</td>
           <td class="who">{{ r.receiver }}</td>
           <td class="memo">{{ r.note|default:"—" }}</td>
+          <td class="memo">{{ r.ip_address|default:"—" }}</td>
           <td class="num"><span class="money">${{ r.amount|intcomma }}</span></td>
         </tr>
         {% endfor %}
       </tbody>
       <tfoot>
         <tr>
-          <td colspan="4">
+          <td colspan="5">
             Page {{ page.number }} of {{ page.paginator.num_pages }} —
             {{ page.paginator.count }} payment{{ page.paginator.count|pluralize }} total
             {% if filters.sender or filters.receiver or filters.date_from or filters.date_to %}matching these filters{% endif %}

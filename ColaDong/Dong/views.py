@@ -21,6 +21,14 @@ from .models import GroupPurchase, Payment
 from .services import compute_balances, monthly_stats, settle_up, split_amount
 
 
+def client_ip(request):
+    """Best-effort client IP, respecting the X-Forwarded-For header."""
+    fwd = request.META.get("HTTP_X_FORWARDED_FOR")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR")
+
+
 class FlatErrorMixin:
     """Flatten Django form errors into the single `error` string the templates expect."""
 
@@ -111,9 +119,9 @@ class RecordsCsvView(LoginRequiredMixin, View):
         response = HttpResponse(content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = 'attachment; filename="coladong-payments.csv"'
         writer = csv.writer(response)
-        writer.writerow(["Date", "Paid by", "Paid to", "Amount", "Note"])
+        writer.writerow(["Date", "Paid by", "Paid to", "Amount", "Note", "IP"])
         for r in qs:
-            writer.writerow([r.date.isoformat(), r.sender.username, r.receiver.username, r.amount, r.note])
+            writer.writerow([r.date.isoformat(), r.sender.username, r.receiver.username, r.amount, r.note, r.ip_address or ""])
         return response
 
 
@@ -157,12 +165,14 @@ class GroupBuyView(LoginRequiredMixin, View):
             return "Pick at least one other person to share with."
 
         try:
-            parts = split_amount(form.cleaned_data["amount"], [w for _, w in others])
+            all_weights = [w for _, w in pairs]
+            parts = split_amount(form.cleaned_data["amount"], all_weights)
         except ValueError:
             return "The shares don't add up."
 
         user_by_name = {u.username: u for u in User.objects.all()}
         note = form.cleaned_data["note"]
+        ip = client_ip(request)
         with transaction.atomic():
             purchase = GroupPurchase(
                 payer=payer,
@@ -178,9 +188,11 @@ class GroupBuyView(LoginRequiredMixin, View):
                     amount=part,
                     date=purchase.date,
                     note=note,
+                    ip_address=ip,
                     group_purchase=purchase,
                 )
-                for (n, _), part in zip(others, parts)
+                for (n, _), part in zip(pairs, parts)
+                if n != payer.username
             )
         messages.success(
             request,
@@ -223,6 +235,7 @@ class AddRecordView(FlatErrorMixin, LoginRequiredMixin, CreateView):
             form.instance.receiver = self.request.user
         else:
             form.instance.sender = self.request.user
+        form.instance.ip_address = client_ip(self.request)
         return super().form_valid(form)
 
     def get_context_data(self, **kwargs):

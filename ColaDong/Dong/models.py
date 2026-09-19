@@ -21,6 +21,7 @@ class Payment(models.Model):
     )
     date = models.DateField()
     note = models.CharField(max_length=200, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
     group_purchase = models.ForeignKey(
         "GroupPurchase",
         null=True,

@@ -180,7 +180,7 @@ class GroupBuyTests(TestCase):
         response = self.post_split(participants=["alice", "bob", "carol"])
         self.assertRedirects(response, reverse("balances"))
         shares = {p.receiver.username: p.amount for p in Payment.objects.all()}
-        self.assertEqual(shares, {"bob": 50, "carol": 50})
+        self.assertEqual(shares, {"bob": 33, "carol": 33})
 
     def test_no_participants_rejected(self):
         response = self.post_split(participants=[])
