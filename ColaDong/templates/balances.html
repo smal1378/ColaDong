@@ -80,6 +80,54 @@
     <a class="btn btn--quiet" href="{% url 'group_buy' %}">Split a purchase</a>
   </div>
 
+  {% if settle_up %}
+  <div class="sheet__body settle-up">
+    <h2>To settle up</h2>
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th scope="col">From</th>
+          <th scope="col">To</th>
+          <th scope="col" class="num">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in settle_up %}
+        <tr>
+          <td class="who">{{ t.from }}</td>
+          <td class="who">{{ t.to }}</td>
+          <td class="num"><span class="money">${{ t.amount|intcomma }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if monthly %}
+  <div class="sheet__body monthly-stats">
+    <h2>Monthly totals</h2>
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th scope="col">Month</th>
+          <th scope="col" class="num">Sent</th>
+          <th scope="col" class="num">Received</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in monthly %}
+        <tr>
+          <td class="who">{{ m.month|date:"F Y" }}</td>
+          <td class="num"><span class="money">${{ m.sent|intcomma }}</span> <small>×{{ m.sent_count }}</small></td>
+          <td class="num"><span class="money">${{ m.received|intcomma }}</span> <small>×{{ m.received_count }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
   {% else %}
   <div class="empty">
     <p>Nothing on the tab yet.</p>

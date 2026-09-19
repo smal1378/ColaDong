@@ -8,6 +8,7 @@
 <div class="pagehead">
   <h1>Payments</h1>
   <p>Every payment recorded by the group, newest first.</p>
+  <a class="btn--link" href="{% url 'records_csv' %}?{{ query_string }}">Export CSV</a>
 </div>
 
 {% comment %}
@@ -20,15 +21,14 @@
              (empty dict on first load is fine)
     total_amount  optional int — sum of the filtered records
 
-  The filter form POSTs back to this same URL with:
+  The filter form GETs to this same URL with:
     sender, receiver, date_from, date_to
   Any of them may be an empty string, meaning "no constraint".
 {% endcomment %}
 
 <div class="sheet">
 
-  <form method="post" action="{% url 'records' %}" class="filters">
-    {% csrf_token %}
+  <form method="get" action="{% url 'records' %}" class="filters">
 
     <div class="field">
       <label for="f_sender">Paid by</label>
@@ -72,7 +72,7 @@
     </div>
   </form>
 
-  {% if records %}
+  {% if page %}
   <div class="scroll-x">
     <table class="ledger">
       <thead>
@@ -85,7 +85,7 @@
         </tr>
       </thead>
       <tbody>
-        {% for r in records %}
+        {% for r in page %}
         <tr>
           <td class="when">{{ r.date|date:"Y-m-d" }}</td>
           <td class="who">{{ r.sender }}</td>
@@ -98,7 +98,8 @@
       <tfoot>
         <tr>
           <td colspan="4">
-            {{ records|length }} payment{{ records|length|pluralize }}
+            Page {{ page.number }} of {{ page.paginator.num_pages }} —
+            {{ page.paginator.count }} payment{{ page.paginator.count|pluralize }} total
             {% if filters.sender or filters.receiver or filters.date_from or filters.date_to %}matching these filters{% endif %}
           </td>
           <td class="num">
@@ -108,6 +109,17 @@
       </tfoot>
     </table>
   </div>
+
+  {% if page.has_other_pages %}
+  <nav class="pagination">
+    {% if page.has_previous %}
+      <a class="btn btn--link" href="{% url 'records' %}?{{ query_string }}{% if query_string %}&{% else %}?{% endif %}page={{ page.previous_page_number }}">Previous</a>
+    {% endif %}
+    {% if page.has_next %}
+      <a class="btn btn--link" href="{% url 'records' %}?{{ query_string }}{% if query_string %}&{% else %}?{% endif %}page={{ page.next_page_number }}">Next</a>
+    {% endif %}
+  </nav>
+  {% endif %}
 
   {% else %}
   <div class="empty">

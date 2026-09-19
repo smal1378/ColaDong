@@ -28,7 +28,15 @@
     <div class="sheet__body">
 
       <div class="field">
-        <label for="id_receiver">Paid to</label>
+        <label>Direction</label>
+        <div class="radio-row">
+          <label class="radio"><input type="radio" name="direction" value="paid" {% if form.direction|default:'paid' == 'paid' %}checked{% endif %}> I paid them</label>
+          <label class="radio"><input type="radio" name="direction" value="borrowed" {% if form.direction == 'borrowed' %}checked{% endif %}> They paid me</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="id_receiver">{% if form.direction == 'borrowed' %}Paid by{% else %}Paid to{% endif %}</label>
         <select id="id_receiver" name="receiver" required>
           <option value="">Choose a person…</option>
           {% for u in users %}

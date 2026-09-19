@@ -8,9 +8,9 @@ negative means they owe the other person.
 from decimal import Decimal
 
 from django.contrib.auth.models import User
-from django.db.models import Sum
+from django.db.models import Sum, Count
 
-from .models import Payment
+from .models import GroupPurchase, Payment
 
 
 def compute_balances(user):
@@ -65,3 +65,72 @@ def split_amount(total, weights):
     for i in range(left):
         parts[order[i % len(order)]] += 1
     return parts
+
+
+def settle_up(user):
+    """Suggest the minimal set of transfers that would settle all debts
+    in the group, from the perspective of `user`.
+
+    Returns a list of dicts: {"from": username, "to": username, "amount": int}
+    """
+    balances = {}
+    for u in User.objects.all():
+        sent = Payment.objects.filter(sender=u).aggregate(t=Sum("amount"))["t"] or 0
+        received = Payment.objects.filter(receiver=u).aggregate(t=Sum("amount"))["t"] or 0
+        balances[u.username] = sent - received
+
+    creditors = {u: b for u, b in balances.items() if b > 0}
+    debtors = {u: -b for u, b in balances.items() if b < 0}
+
+    transfers = []
+    while debtors and creditors:
+        debtor = max(debtors, key=debtors.get)
+        creditor = max(creditors, key=creditors.get)
+        amount = min(debtors[debtor], creditors[creditor])
+        transfers.append({"from": debtor, "to": creditor, "amount": amount})
+        debtors[debtor] -= amount
+        creditors[creditor] -= amount
+        if debtors[debtor] == 0:
+            del debtors[debtor]
+        if creditors[creditor] == 0:
+            del creditors[creditor]
+    return transfers
+
+
+def monthly_stats(user):
+    """Total sent and received per month for `user`, most recent first."""
+    from django.db.models.functions import TruncMonth
+
+    sent = (
+        Payment.objects.filter(sender=user)
+        .annotate(month=TruncMonth("date"))
+        .values("month")
+        .annotate(total=Sum("amount"), count=Count("id"))
+    )
+    received = (
+        Payment.objects.filter(receiver=user)
+        .annotate(month=TruncMonth("date"))
+        .values("month")
+        .annotate(total=Sum("amount"), count=Count("id"))
+    )
+
+    months = {}
+    for row in sent:
+        m = row["month"]
+        if m is None:
+            continue
+        months.setdefault(m, {"sent": 0, "received": 0, "sent_count": 0, "received_count": 0})
+        months[m]["sent"] = row["total"] or 0
+        months[m]["sent_count"] = row["count"] or 0
+    for row in received:
+        m = row["month"]
+        if m is None:
+            continue
+        months.setdefault(m, {"sent": 0, "received": 0, "sent_count": 0, "received_count": 0})
+        months[m]["received"] = row["total"] or 0
+        months[m]["received_count"] = row["count"] or 0
+
+    return [
+        {"month": m, "sent": v["sent"], "received": v["received"], "sent_count": v["sent_count"], "received_count": v["received_count"]}
+        for m, v in sorted(months.items(), reverse=True)
+    ]

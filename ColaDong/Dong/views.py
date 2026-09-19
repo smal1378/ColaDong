@@ -1,12 +1,16 @@
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
+import csv
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Sum
+from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
 from django.views import View
@@ -14,7 +18,7 @@ from django.views.generic import CreateView, TemplateView
 
 from .forms import GroupBuyForm, PaymentForm, RecordFilterForm, flatten_errors, refill_dict
 from .models import GroupPurchase, Payment
-from .services import compute_balances, split_amount
+from .services import compute_balances, monthly_stats, settle_up, split_amount
 
 
 class FlatErrorMixin:
@@ -46,29 +50,54 @@ class BalancesView(LoginRequiredMixin, TemplateView):
         balances = compute_balances(self.request.user)
         context["balances"] = balances
         context["net_balance"] = sum(row["balance"] for row in balances)
+        context["settle_up"] = settle_up(self.request.user)
+        context["monthly"] = monthly_stats(self.request.user)
         return context
 
 
-class RecordsView(LoginRequiredMixin, View):
-    """The payment list. Filters POST to the same URL; a bare GET shows
-    everything."""
+class RecordsView(LoginRequiredMixin, TemplateView):
+    """The payment list. Filters use GET so filtered views are bookmarkable."""
 
     template_name = "records.html"
     filter_names = ("sender", "receiver", "date_from", "date_to")
 
-    def get(self, request):
-        return self._render(request)
-
-    def post(self, request):
-        form = RecordFilterForm(request.POST)
-        if not form.is_valid():
-            messages.error(request, flatten_errors(form))
-        filters = {name: request.POST.get(name, "") for name in self.filter_names}
-        return self._render(request, form=form, filters=filters)
-
-    def _render(self, request, form=None, filters=None):
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        form = RecordFilterForm(self.request.GET or None)
         qs = Payment.objects.select_related("sender", "receiver")
-        if form is not None and form.is_valid():
+        if form.is_valid():
+            data = form.cleaned_data
+            if data["sender"]:
+                qs = qs.filter(sender=data["sender"])
+            if data["receiver"]:
+                qs = qs.filter(receiver=data["receiver"])
+            if data["date_from"]:
+                qs = qs.filter(date__gte=data["date_from"])
+            if data["date_to"]:
+                qs = qs.filter(date__lte=data["date_to"])
+        qs = qs.order_by("-date", "-id")
+        paginator = Paginator(qs, 25)
+        page_number = self.request.GET.get("page", 1)
+        page = paginator.get_page(page_number)
+        params = self.request.GET.copy()
+        params.pop("page", None)
+        context["users"] = User.objects.order_by("username")
+        context["page"] = page
+        context["filters"] = {name: self.request.GET.get(name, "") for name in self.filter_names}
+        context["total_amount"] = qs.aggregate(total=Sum("amount"))["total"] or 0
+        context["query_string"] = params.urlencode()
+        return context
+
+
+class RecordsCsvView(LoginRequiredMixin, View):
+    """Download the (filtered) records as a CSV file."""
+
+    filter_names = ("sender", "receiver", "date_from", "date_to")
+
+    def get(self, request):
+        form = RecordFilterForm(request.GET or None)
+        qs = Payment.objects.select_related("sender", "receiver").order_by("-date", "-id")
+        if form.is_valid():
             data = form.cleaned_data
             if data["sender"]:
                 qs = qs.filter(sender=data["sender"])
@@ -79,13 +108,13 @@ class RecordsView(LoginRequiredMixin, View):
             if data["date_to"]:
                 qs = qs.filter(date__lte=data["date_to"])
 
-        context = {
-            "users": User.objects.order_by("username"),
-            "records": qs,
-            "filters": filters or {},
-            "total_amount": qs.aggregate(total=Sum("amount"))["total"] or 0,
-        }
-        return render(request, self.template_name, context)
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = 'attachment; filename="coladong-payments.csv"'
+        writer = csv.writer(response)
+        writer.writerow(["Date", "Paid by", "Paid to", "Amount", "Note"])
+        for r in qs:
+            writer.writerow([r.date.isoformat(), r.sender.username, r.receiver.username, r.amount, r.note])
+        return response
 
 
 class GroupBuyView(LoginRequiredMixin, View):
@@ -189,7 +218,11 @@ class AddRecordView(FlatErrorMixin, LoginRequiredMixin, CreateView):
         return kwargs
 
     def form_valid(self, form):
-        form.instance.sender = self.request.user
+        if form.cleaned_data.get("direction") == "borrowed":
+            form.instance.sender = form.cleaned_data["receiver"]
+            form.instance.receiver = self.request.user
+        else:
+            form.instance.sender = self.request.user
         return super().form_valid(form)
 
     def get_context_data(self, **kwargs):
@@ -198,5 +231,5 @@ class AddRecordView(FlatErrorMixin, LoginRequiredMixin, CreateView):
         context["today"] = date.today().isoformat()
         form = kwargs.get("form")
         if form is not None:
-            context["form"] = refill_dict(form, "receiver", "amount", "date", "note")
+            context["form"] = refill_dict(form, "direction", "receiver", "amount", "date", "note")
         return context

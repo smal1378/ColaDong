@@ -17,6 +17,7 @@ urlpatterns = [
     path("logout/", LogoutView.as_view(), name="logout"),
     path("balances/", views.BalancesView.as_view(), name="balances"),
     path("records/", views.RecordsView.as_view(), name="records"),
+    path("records/export/", views.RecordsCsvView.as_view(), name="records_csv"),
     path("add-record/", views.AddRecordView.as_view(), name="add_record"),
     path("group-buy/", views.GroupBuyView.as_view(), name="group_buy"),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

@@ -8,6 +8,11 @@ class PaymentForm(forms.ModelForm):
     """Adding a payment. The sender is always the signed-in user, so it
     never appears here — the dropdown only offers the *other* users."""
 
+    direction = forms.ChoiceField(
+        choices=[("paid", "I paid them"), ("borrowed", "They paid me")],
+        initial="paid",
+        required=False,
+    )
     receiver = forms.ModelChoiceField(
         queryset=User.objects.all(),
         to_field_name="username",

@@ -27,11 +27,14 @@ choices about *how the code is shaped*.
 
 ## Trust boundaries
 
-- **`add_record` never reads the sender from the request.** The form only
-  asks for a receiver; the sender is always the logged-in user, set
-  server-side in `get_form_kwargs`/`form_valid`. The receiver dropdown also
-  excludes the signed-in user, so a crafted `receiver=<self>` fails
-  `ModelChoiceField` validation before `clean_receiver` is even reached.
+- **`add_record` never reads the sender from the request** in the `paid`
+  direction. The form only asks for a receiver; the sender is always the
+  logged-in user, set server-side. In the `borrowed` direction the
+  selected user *is* the sender (they paid the logged-in user), which is
+  the intended behavior — the user is recording that someone else paid them.
+  The receiver dropdown excludes the signed-in user for `paid`; for
+  `borrowed` it includes them (the sender dropdown includes everyone except
+  the logged-in user in that direction).
 - **`group_buy`'s payer *is* selectable**, including someone other than the
   logged-in user. Deliberate: the app is for a small friend group on the
   honor system, and logging a purchase on a friend's behalf is a feature
@@ -52,10 +55,10 @@ choices about *how the code is shaped*.
   `min_value=0` and drops the model's `MinValueValidator(1)`, so without
   the explicit declaration the form would accept 0 and its error message
   would say "0" instead of "1".
-- **The records filter is a plain `View`, not a form-based CBV.** The four
-  filters are all optional and a bare GET must show everything; forcing the
-  CBV form pattern (form invalid → no data) doesn't fit. Invalid filter
-  values produce a flash message and the unfiltered list.
+- **The records filter is a `TemplateView` with GET**, not a POST form.
+  Filtered views are bookmarkable and shareable by URL. The `query_string`
+  context var carries the current filter params (minus `page`) into the
+  pagination links so filtering survives page changes.
 - **Group-buy participants and weights are read from the request in the
   view**, not as form fields: the weight inputs are named `weight_<username>`,
   so their field names are dynamic. The static top of the form (payer,
@@ -65,9 +68,10 @@ choices about *how the code is shaped*.
   `GroupPurchase` row and all its `Payment` shares commit or roll back
   together. The payer is excluded from the shares — they paid, they owe
   nobody from this purchase.
-- **Filter form POSTs, not GET** — filtered views aren't bookmarkable.
-  Deliberately deferred (see `CONTEXT.md`); switching to GET later is a
-  small contained change.
+- **The records filter is a `TemplateView` with GET**, not a POST form.
+  Filtered views are bookmarkable and shareable by URL. The `query_string`
+  context var carries the current filter params (minus `page`) into the
+  pagination links so filtering survives page changes.
 
 ## Django version traps
 
@@ -95,3 +99,27 @@ choices about *how the code is shaped*.
   between any two parts is at most 1.
 - Run with `uv run python manage.py test Dong` from the `ColaDong/`
   directory.
+
+## Added features (Sep 2026)
+
+- **Pagination** (25 per page) on the records list. The filter params are
+  carried through via a `query_string` context var so pagination links
+  preserve the active filters.
+- **CSV export** on the records page. `RecordsCsvView` is a plain
+  `View(LoginRequiredMixin, View)` that applies the same filter logic as
+  `RecordsView` and streams a `text/csv; charset=utf-8` response. Amounts
+  are plain integers (no `$` prefix). The export link appears in the
+  pagehead alongside the filter form.
+- **Borrowed money (direction toggle)** on the add-record form. A
+  `direction` ChoiceField (`paid` / `borrowed`) is form-only, not a model
+  field. When `borrowed` is selected, `form_valid` swaps sender and
+  receiver: the logged-in user becomes the receiver and the selected user
+  becomes the sender. The sender dropdown is still excluded for `paid`
+  but included for `borrowed` (you can record that someone else paid you).
+- **Settle-up suggestions** on the balances page. `settle_up(user)` in
+  `services.py` uses a greedy algorithm: sort creditors descending, sort
+  debtors ascending, match the largest pair, repeat. The sign convention
+  is `sent - received` (positive = creditor, negative = debtor).
+- **Monthly stats** on the balances page. `monthly_stats(user)` in
+  `services.py` uses `TruncMonth` to group payments by month, showing
+  total sent and received with counts, most recent first.

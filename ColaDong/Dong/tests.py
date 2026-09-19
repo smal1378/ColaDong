@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from .models import GroupPurchase, Payment
-from .services import compute_balances, split_amount
+from .services import compute_balances, monthly_stats, settle_up, split_amount
 
 
 class BalanceTests(TestCase):
@@ -32,6 +32,64 @@ class BalanceTests(TestCase):
         carol = User.objects.create_user("carol", password="pw")
         rows = {r["username"]: r["balance"] for r in compute_balances(self.alice)}
         self.assertEqual(rows["carol"], 0)
+
+
+class SettleUpTests(TestCase):
+    def setUp(self):
+        self.alice = User.objects.create_user("alice", password="pw")
+        self.bob = User.objects.create_user("bob", password="pw")
+        self.carol = User.objects.create_user("carol", password="pw")
+
+    def test_single_debt(self):
+        Payment.objects.create(sender=self.alice, receiver=self.bob, amount=100, date="2026-01-01")
+        transfers = settle_up(self.alice)
+        self.assertEqual(len(transfers), 1)
+        self.assertEqual(transfers[0]["from"], "bob")
+        self.assertEqual(transfers[0]["to"], "alice")
+        self.assertEqual(transfers[0]["amount"], 100)
+
+    def test_mutual_payments_no_settlement(self):
+        Payment.objects.create(sender=self.alice, receiver=self.bob, amount=100, date="2026-01-01")
+        Payment.objects.create(sender=self.bob, receiver=self.alice, amount=100, date="2026-01-02")
+        self.assertEqual(settle_up(self.alice), [])
+
+    def test_three_way_settlement(self):
+        Payment.objects.create(sender=self.alice, receiver=self.bob, amount=200, date="2026-01-01")
+        Payment.objects.create(sender=self.alice, receiver=self.carol, amount=100, date="2026-01-02")
+        transfers = settle_up(self.alice)
+        self.assertEqual(len(transfers), 2)
+        amounts = sorted(t["amount"] for t in transfers)
+        self.assertEqual(amounts, [100, 200])
+
+    def test_balances_sum_to_zero(self):
+        Payment.objects.create(sender=self.alice, receiver=self.bob, amount=50, date="2026-01-01")
+        Payment.objects.create(sender=self.bob, receiver=self.carol, amount=30, date="2026-01-02")
+        transfers = settle_up(self.alice)
+        for t in transfers:
+            self.assertGreater(t["amount"], 0)
+
+
+class MonthlyStatsTests(TestCase):
+    def setUp(self):
+        self.alice = User.objects.create_user("alice", password="pw")
+        self.bob = User.objects.create_user("bob", password="pw")
+
+    def test_monthly_totals(self):
+        Payment.objects.create(sender=self.alice, receiver=self.bob, amount=100, date="2026-09-01")
+        Payment.objects.create(sender=self.alice, receiver=self.bob, amount=50, date="2026-09-15")
+        Payment.objects.create(sender=self.bob, receiver=self.alice, amount=30, date="2026-09-20")
+        Payment.objects.create(sender=self.alice, receiver=self.bob, amount=20, date="2026-10-05")
+
+        stats = monthly_stats(self.alice)
+        self.assertEqual(len(stats), 2)
+        sep = [m for m in stats if m["month"].month == 9][0]
+        oct = [m for m in stats if m["month"].month == 10][0]
+        self.assertEqual(sep["sent"], 150)
+        self.assertEqual(sep["received"], 30)
+        self.assertEqual(sep["sent_count"], 2)
+        self.assertEqual(sep["received_count"], 1)
+        self.assertEqual(oct["sent"], 20)
+        self.assertEqual(oct["received"], 0)
 
 
 class AuthTests(TestCase):
@@ -165,6 +223,14 @@ class AddRecordTests(TestCase):
         self.post_record()
         self.assertEqual(Payment.objects.get().sender, self.alice)
 
+    def test_borrowed_direction_swaps_sender_receiver(self):
+        response = self.post_record(direction="borrowed")
+        self.assertRedirects(response, reverse("balances"))
+        payment = Payment.objects.get()
+        self.assertEqual(payment.sender, self.bob)
+        self.assertEqual(payment.receiver, self.alice)
+        self.assertEqual(payment.amount, 100)
+
     def test_self_payment_rejected(self):
         response = self.post_record(receiver="alice")
         self.assertContains(response, "Select a valid choice")
@@ -197,29 +263,49 @@ class RecordsFilterTests(TestCase):
         self.client.login(username="alice", password="pw")
 
     def test_filter_by_sender(self):
-        response = self.client.post(reverse("records"), {"sender": "alice", "receiver": "", "date_from": "", "date_to": ""})
+        response = self.client.get(reverse("records"), {"sender": "alice"})
         self.assertContains(response, "a")
         self.assertNotContains(response, "note b")
         self.assertContains(response, "matching these filters")
 
     def test_filter_by_date_range(self):
-        response = self.client.post(
+        response = self.client.get(
             reverse("records"),
-            {"sender": "", "receiver": "", "date_from": "2026-09-10", "date_to": "2026-09-20"},
+            {"date_from": "2026-09-10", "date_to": "2026-09-20"},
         )
         self.assertContains(response, "b")
         self.assertNotContains(response, "note a")
 
-    def test_inverted_dates_rejected(self):
-        response = self.client.post(
+    def test_inverted_dates_show_all(self):
+        """An invalid date range is ignored; all records are shown."""
+        response = self.client.get(
             reverse("records"),
-            {"sender": "", "receiver": "", "date_from": "2026-09-20", "date_to": "2026-09-01"},
+            {"date_from": "2026-09-20", "date_to": "2026-09-01"},
         )
-        self.assertContains(response, "start date is after the end date")
+        self.assertContains(response, "a")
+        self.assertContains(response, "b")
 
     def test_total_amount(self):
         response = self.client.get(reverse("records"))
         self.assertContains(response, "$120")
+
+    def test_csv_export(self):
+        response = self.client.get(reverse("records_csv"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
+        self.assertIn("attachment", response["Content-Disposition"])
+        content = response.content.decode()
+        self.assertIn("Date", content)
+        self.assertIn("Paid by", content)
+        self.assertIn("Paid to", content)
+        self.assertIn(",50,", content)
+        self.assertIn(",70,", content)
+
+    def test_csv_export_respects_filters(self):
+        response = self.client.get(reverse("records_csv"), {"sender": "alice"})
+        content = response.content.decode()
+        self.assertIn(",50,", content)
+        self.assertNotIn(",70,", content)
 
 
 class PageTests(TestCase):

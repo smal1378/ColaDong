@@ -412,6 +412,16 @@ input:hover, select:hover, textarea:hover { border-color: var(--ink-soft); }
   font-size: 0.875rem;
 }
 
+/* ---------- pagination ---------- */
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  border-top: 1px solid var(--hairline);
+  font-size: 0.875rem;
+}
+
 /* ---------- login ---------- */
 
 .signin { max-width: 22.5rem; margin: 3.5rem auto 0; }
