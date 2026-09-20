@@ -68,9 +68,10 @@ ColaDong/                     <- repo root (git lives here)
       views.py                all views (CBV + plain View mix)
       forms.py                PaymentForm, RecordFilterForm, GroupBuyForm
       services.py             compute_balances(), split_amount()
-      admin.py                both models registered
-      tests.py                full test suite (~27 tests)
-      migrations/0001_initial.py
+       admin.py                both models registered
+       tests.py                full test suite (54 tests)
+       migrations/0001_initial.py
+       migrations/0002_payment_ip_address.py
     templates/                6 templates (base, login, balances, records,
                               add_record, group_buy) — the frontend contract
     static/css/coladong.css
@@ -120,16 +121,17 @@ errors as `;`-joined string).
 
 | Page (url name) | Context variables |
 |---|---|
-| `balances` | `balances` (list of dicts: username, name, balance), `net_balance` (int) |
-| `records` | `users` (list of all User objects), `records` (list of Payment), `filters` (dict with sender/receiver/date_from/date_to), `total_amount` (int Sum of shown amounts) |
+| `records` | `users` (all User objects), `page` (Django Page object, 25/page), `query_string` (current filter params minus `page`, for pagination links), `filters` (dict with sender/receiver/date_from/date_to), `total_amount` (int Sum of shown amounts) |
+| `balances` | `balances` (list of dicts: username, name, balance), `net_balance` (int), `settle_up` (list of {from,to,amount} dicts), `monthly` (list of {month, sent, received, sent_count, received_count} dicts) |
 | `add_record` | `form` (refill dict), `error` (string, rendered by base.html) |
 | `group_buy` | `users` (list of dicts: username, name, selected, weight), `form` (refill dict: payer/amount/date/note), `today` (YYYY-MM-DD string), `error` |
 | `login` | standard auth context + flat `error` string |
 
-POST field names:
-- `add_record`: `receiver` (username string), `amount`, `date`, `note`
-- `records` filter (POST form): `sender`, `receiver`, `date_from`, `date_to`
-- `group_buy`: `payer` (username), `amount`, `date`, `note`,
+Field names:
+- `add_record` (POST): `receiver` (username string), `amount`, `date`, `note`
+- `records` filter (**GET** form, so filtered URLs are bookmarkable):
+  `sender`, `receiver`, `date_from`, `date_to`; pagination via `page`
+- `group_buy` (POST): `payer` (username), `amount`, `date`, `note`,
   `participants` (repeated usernames), `weight_<username>` per participant
 
 ## 7. Implementation status
@@ -152,30 +154,58 @@ POST field names:
    added `AddRecordTests` + `RecordsFilterTests` (27 tests, green), and
    this file
 8. `3562470` `Decisions.md` + `README.md` rewrite
+9. `7684ddd` refreshed this file after the doc commits
+10. `f85d4c8` set the `pyproject.toml` description
+11. `ae2927f` a note by the owner
+12. `816825f` the features pass: GET filtering (records filter switched
+    POST → GET, so filtered URLs are bookmarkable), pagination
+    (`Paginator(qs, 25)`), CSV export (`RecordsCsvView`), borrowed-money
+    direction toggle (`direction` ChoiceField), settle-up suggestions
+    (`settle_up()`) and monthly stats (`monthly_stats()`) on the balances
+    page
+13. `0630429` IP-address logging (`ip_address` field + `client_ip()`
+    helper, `0002` migration) and removed `AUTH_PASSWORD_VALIDATORS`.
+    **This commit also introduced a group-buy split regression** — it
+    switched the split from the non-payer `others` to `all_weights`, so
+    the payer's weight consumed part of the total and the others
+    received less than the purchase amount.
+14. `4e824c9` fixed that group-buy split regression (the payer's weight
+    is excluded again, so the others split the full amount), extracted
+    the `apply_filters()` helper (shared by RecordsView and
+    RecordsCsvView), dropped the unused `user` arg from `settle_up()`,
+    added the group-purchase badge on records, the borrowed-money
+    dynamic label, IP in the admin `list_display` + CSV export, a CSS
+    `--hairline` fix, and 13 new tests (54 total, all green)
 
 ### Not started
-- A "features pass" the owner asked for once the core is stable
-  (ideas floated: settle-up suggestions on balances, monthly stats).
-  Owner is out of town; see §8 before starting new features.
+- Nothing blocking. The core and the features pass are done and
+  committed; all 54 tests pass. See §9 for the remaining open questions
+  (CSP and owner sign-off on the docs).
 
-## 8. The RETURN.txt protocol (IMPORTANT)
+## 8. The RETURN.txt protocol
 
-The owner is away and may come back at any time. `RETURN.txt` contains
-`False` while they're out. **Check it frequently** (e.g. before each
-commit). If its content changes to `True` or any "I'm back" text:
-1. Stop starting new work.
-2. Give a clear status update of everything done.
-3. Ask the owner questions about open decisions (see §9).
+`RETURN.txt` used to gate work while the owner was away. **The owner is
+now back and has explicitly authorized committing changes** (they said
+"commit your changes — you're allowed to"). So the old stop-and-ask
+protocol no longer applies: commit in small logical steps as work is done
+and keep this file updated. If the owner later says to hold off on
+commits, respect that.
 
 ## 9. Open questions for the owner
 
-1. Features pass: which ideas (settle-up suggestions? stats? pagination?)
-2. Review `Decisions.md` and the rewritten `README.md` — written, awaiting
-   the owner's sign-off.
-3. The records filter form POSTs (not GET) so filtered URLs aren't
-   bookmarkable — switch to GET? (small contained change)
-4. Django 6.0's `SECURE_CSP` exists but is off; `group_buy.html` has an
-   inline `<script>` that a strict CSP would block.
+Resolved since the last update:
+- **Features pass** — done. Settle-up suggestions, monthly stats,
+  pagination, CSV export, GET filtering and the borrowed-money toggle are
+  all implemented and committed (see §7, items 12–14).
+- **Records filter POST → GET** — done. `RecordsView` is now a
+  `TemplateView` reading `request.GET`, so filtered URLs are bookmarkable.
+
+Still open:
+1. Review `Decisions.md` (updated) and the rewritten `README.md` —
+   awaiting the owner's sign-off.
+2. Django 6.0's `SECURE_CSP` exists but is off; `group_buy.html` has an
+   inline `<script>` (the live split preview) that a strict CSP would
+   block until it's moved to a static `.js` file.
 
 ## 10. Working conventions in this repo
 
