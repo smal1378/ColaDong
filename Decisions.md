@@ -130,3 +130,28 @@ choices about *how the code is shaped*.
 - **Password validators disabled** (`AUTH_PASSWORD_VALIDATORS = []`).
   The friend group uses simple usernames; enforcing complexity rules
   added friction without security benefit at this scale.
+
+## Deployment (Sep 2026)
+
+- **No root / no sudo at runtime.** The systemd service runs as a
+  dedicated non-root `RUN_USER`. `update.sh` (pull, uv sync, migrate,
+  collectstatic) runs as that same user — it only needs write access to
+  the repo dir and the staticfiles dir, both owned by `RUN_USER`.
+- **Service restart without root.** Instead of `systemctl restart`
+  (which requires root or `polkit` rules), `update.sh` kills the gunicorn
+  master via its PID file (`SIGTERM`, 15 s wait, `SIGKILL` fallback).
+  The systemd unit uses `Restart=always` so the service auto-restarts on
+  the clean exit. This keeps the entire update path root-free.
+- **Gunicorn PID file.** `--pid ${LOG_DIR}/gunicorn.pid` in the
+  `ExecStart` line gives `update.sh` a stable path to find and signal the
+  master process.
+- **`AdminUpdateView` spawns the script detached.** The Django admin
+  "Update now" button POSTs to a `View` that calls
+  `subprocess.Popen(["bash", "deploy/update.sh"], start_new_session=True)`,
+  so the HTTP response (202) returns before gunicorn is killed. Logs go
+  to `/var/log/coladong/update.log` (fallback: `BASE_DIR/update.log`
+  for dev).
+- **Settings are env-var-driven.** `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`,
+  `DJANGO_ALLOWED_HOSTS`, `DJANGO_STATIC_ROOT` are read from the
+  environment with dev-safe defaults. A production hardening block
+  activates automatically when `DEBUG=False`.

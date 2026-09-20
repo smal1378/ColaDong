@@ -54,6 +54,24 @@ templates/                 six pages, all extend base.html
 static/css/coladong.css    the whole design system
 ```
 
+## Deploy (Ubuntu 22.04)
+
+```bash
+sudo bash deploy/install.sh
+```
+
+The script creates a non-root service user, installs `uv`, writes the
+systemd unit (gunicorn on `127.0.0.1:8000`, `Restart=always`), and
+generates an nginx example config. After install, update with:
+
+```bash
+bash deploy/update.sh
+```
+
+or click **"Update now"** on the Django admin dashboard (superuser
+only). Both paths are root-free: the script kills gunicorn via its PID
+file and systemd restarts it.
+
 ## Docs
 
 - **`CONTEXT.md`** — why the project is shaped the way it is: the domain

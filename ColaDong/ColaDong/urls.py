@@ -20,4 +20,5 @@ urlpatterns = [
     path("records/export/", views.RecordsCsvView.as_view(), name="records_csv"),
     path("add-record/", views.AddRecordView.as_view(), name="add_record"),
     path("group-buy/", views.GroupBuyView.as_view(), name="group_buy"),
+    path("admin/coladong-update/", views.AdminUpdateView.as_view(), name="admin_update"),
 ] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

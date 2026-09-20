@@ -1,10 +1,13 @@
+import subprocess
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 
 import csv
 
+from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView
 from django.core.paginator import Paginator
@@ -238,3 +241,26 @@ class AddRecordView(FlatErrorMixin, LoginRequiredMixin, CreateView):
         if form is not None:
             context["form"] = refill_dict(form, "direction", "receiver", "amount", "date", "note")
         return context
+
+
+class AdminUpdateView(LoginRequiredMixin, UserPassesTestMixin, View):
+    """Trigger a deploy/update.sh run from the Django admin dashboard.
+    Spawns the script in a detached session so the HTTP response returns
+    immediately while the script (which kills this gunicorn) keeps running."""
+
+    def test_func(self):
+        return self.request.user.is_superuser
+
+    def post(self, request):
+        script = Path(settings.BASE_DIR).parent / "deploy" / "update.sh"
+        log_path = Path("/var/log/coladong/update.log")
+        if not log_path.parent.is_dir():
+            log_path = Path(settings.BASE_DIR) / "update.log"
+        with open(log_path, "a") as log:
+            subprocess.Popen(
+                ["bash", str(script)],
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        return HttpResponse("Update started. Refresh this page in a minute.", status=202)

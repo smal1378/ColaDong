@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -18,14 +19,25 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
+#
+# In production the deploy scripts (see deploy/) inject these values via
+# environment variables, so a fresh checkout keeps working out of the box for
+# local development while the server can supply its own.
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-citn%@-zc6j3(jo*k&h7vjb303rhtjvh4q04z37ssvc^*wgylx'
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-citn%@-zc6j3(jo*k&h7vjb303rhtjvh4q04z37ssvc^*wgylx',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'true').strip().lower() in ('1', 'true', 'yes', 'on')
 
-ALLOWED_HOSTS = []
+_hosts = os.environ.get('DJANGO_ALLOWED_HOSTS', '').strip()
+ALLOWED_HOSTS = [h.strip() for h in _hosts.split(',') if h.strip()] if _hosts else []
+
+# Directory collected into by `manage.py collectstatic` (served by nginx).
+STATIC_ROOT = Path(os.environ.get('DJANGO_STATIC_ROOT', BASE_DIR / 'staticfiles'))
 
 
 # Application definition
@@ -111,4 +123,19 @@ LOGOUT_REDIRECT_URL = 'login'
 STATIC_URL = 'static/'
 
 
+# Production hardening
+# ------------------------------------------------------------------
+# Only applied when DEBUG is off (i.e. the deployed server). With DEBUG on
+# (local development) these are skipped so the dev server stays permissive.
+# SSL termination is handled by nginx, so we tell Django the connection is
+# secure behind the proxy and set the usual cookie/security flags.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_REFERRER_POLICY = 'same-origin'
+    X_FRAME_OPTIONS = 'DENY'
 

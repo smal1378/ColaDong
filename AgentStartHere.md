@@ -177,10 +177,19 @@ Field names:
     dynamic label, IP in the admin `list_display` + CSV export, a CSS
     `--hairline` fix, and 13 new tests (54 total, all green)
 
+15. Deployment: `deploy/install.sh` (systemd + gunicorn + env file +
+    nginx example), `deploy/update.sh` (pull, sync, migrate,
+    collectstatic, restart via pidfile kill), `AdminUpdateView` in
+    `views.py` (POST endpoint that spawns `update.sh` detached),
+    admin dashboard "Update now" button (`templates/admin/index.html`
+    override), `gunicorn~=23.0` added to `pyproject.toml`, settings
+    env-var aware (`DJANGO_SECRET_KEY`, `DJANGO_DEBUG`,
+    `DJANGO_ALLOWED_HOSTS`, `DJANGO_STATIC_ROOT`).
+
 ### Not started
-- Nothing blocking. The core and the features pass are done and
-  committed; all 54 tests pass. See §9 for the remaining open questions
-  (CSP and owner sign-off on the docs).
+- Nothing blocking. The core, the features pass, and the deployment
+  scripts are done and committed; all 54 tests pass. See §9 for the
+  remaining open questions (CSP and owner sign-off on the docs).
 
 ## 8. The RETURN.txt protocol
 
