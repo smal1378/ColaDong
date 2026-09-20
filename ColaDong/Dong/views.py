@@ -21,6 +21,22 @@ from .models import GroupPurchase, Payment
 from .services import compute_balances, monthly_stats, settle_up, split_amount
 
 
+def apply_filters(qs, request):
+    """Apply the record filters from the GET params to a queryset."""
+    form = RecordFilterForm(request.GET or None)
+    if form.is_valid():
+        data = form.cleaned_data
+        if data["sender"]:
+            qs = qs.filter(sender=data["sender"])
+        if data["receiver"]:
+            qs = qs.filter(receiver=data["receiver"])
+        if data["date_from"]:
+            qs = qs.filter(date__gte=data["date_from"])
+        if data["date_to"]:
+            qs = qs.filter(date__lte=data["date_to"])
+    return qs
+
+
 def client_ip(request):
     """Best-effort client IP, respecting the X-Forwarded-For header."""
     fwd = request.META.get("HTTP_X_FORWARDED_FOR")
@@ -58,7 +74,7 @@ class BalancesView(LoginRequiredMixin, TemplateView):
         balances = compute_balances(self.request.user)
         context["balances"] = balances
         context["net_balance"] = sum(row["balance"] for row in balances)
-        context["settle_up"] = settle_up(self.request.user)
+        context["settle_up"] = settle_up()
         context["monthly"] = monthly_stats(self.request.user)
         return context
 
@@ -71,19 +87,7 @@ class RecordsView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        form = RecordFilterForm(self.request.GET or None)
-        qs = Payment.objects.select_related("sender", "receiver")
-        if form.is_valid():
-            data = form.cleaned_data
-            if data["sender"]:
-                qs = qs.filter(sender=data["sender"])
-            if data["receiver"]:
-                qs = qs.filter(receiver=data["receiver"])
-            if data["date_from"]:
-                qs = qs.filter(date__gte=data["date_from"])
-            if data["date_to"]:
-                qs = qs.filter(date__lte=data["date_to"])
-        qs = qs.order_by("-date", "-id")
+        qs = apply_filters(Payment.objects.select_related("sender", "receiver"), self.request).order_by("-date", "-id")
         paginator = Paginator(qs, 25)
         page_number = self.request.GET.get("page", 1)
         page = paginator.get_page(page_number)
@@ -103,18 +107,7 @@ class RecordsCsvView(LoginRequiredMixin, View):
     filter_names = ("sender", "receiver", "date_from", "date_to")
 
     def get(self, request):
-        form = RecordFilterForm(request.GET or None)
-        qs = Payment.objects.select_related("sender", "receiver").order_by("-date", "-id")
-        if form.is_valid():
-            data = form.cleaned_data
-            if data["sender"]:
-                qs = qs.filter(sender=data["sender"])
-            if data["receiver"]:
-                qs = qs.filter(receiver=data["receiver"])
-            if data["date_from"]:
-                qs = qs.filter(date__gte=data["date_from"])
-            if data["date_to"]:
-                qs = qs.filter(date__lte=data["date_to"])
+        qs = apply_filters(Payment.objects.select_related("sender", "receiver"), request).order_by("-date", "-id")
 
         response = HttpResponse(content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = 'attachment; filename="coladong-payments.csv"'
@@ -165,8 +158,8 @@ class GroupBuyView(LoginRequiredMixin, View):
             return "Pick at least one other person to share with."
 
         try:
-            all_weights = [w for _, w in pairs]
-            parts = split_amount(form.cleaned_data["amount"], all_weights)
+            others_weights = [w for _, w in others]
+            parts = split_amount(form.cleaned_data["amount"], others_weights)
         except ValueError:
             return "The shares don't add up."
 
@@ -191,8 +184,7 @@ class GroupBuyView(LoginRequiredMixin, View):
                     ip_address=ip,
                     group_purchase=purchase,
                 )
-                for (n, _), part in zip(pairs, parts)
-                if n != payer.username
+                for (n, _), part in zip(others, parts)
             )
         messages.success(
             request,

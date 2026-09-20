@@ -33,6 +33,13 @@ class BalanceTests(TestCase):
         rows = {r["username"]: r["balance"] for r in compute_balances(self.alice)}
         self.assertEqual(rows["carol"], 0)
 
+    def test_netted_balance(self):
+        """Alice pays Bob $200, Bob pays Alice $100 → net +100 for Alice."""
+        Payment.objects.create(sender=self.alice, receiver=self.bob, amount=200, date="2026-01-01")
+        Payment.objects.create(sender=self.bob, receiver=self.alice, amount=100, date="2026-01-02")
+        alice = {r["username"]: r["balance"] for r in compute_balances(self.alice)}
+        self.assertEqual(alice["bob"], 100)
+
 
 class SettleUpTests(TestCase):
     def setUp(self):
@@ -42,7 +49,7 @@ class SettleUpTests(TestCase):
 
     def test_single_debt(self):
         Payment.objects.create(sender=self.alice, receiver=self.bob, amount=100, date="2026-01-01")
-        transfers = settle_up(self.alice)
+        transfers = settle_up()
         self.assertEqual(len(transfers), 1)
         self.assertEqual(transfers[0]["from"], "bob")
         self.assertEqual(transfers[0]["to"], "alice")
@@ -51,12 +58,12 @@ class SettleUpTests(TestCase):
     def test_mutual_payments_no_settlement(self):
         Payment.objects.create(sender=self.alice, receiver=self.bob, amount=100, date="2026-01-01")
         Payment.objects.create(sender=self.bob, receiver=self.alice, amount=100, date="2026-01-02")
-        self.assertEqual(settle_up(self.alice), [])
+        self.assertEqual(settle_up(), [])
 
     def test_three_way_settlement(self):
         Payment.objects.create(sender=self.alice, receiver=self.bob, amount=200, date="2026-01-01")
         Payment.objects.create(sender=self.alice, receiver=self.carol, amount=100, date="2026-01-02")
-        transfers = settle_up(self.alice)
+        transfers = settle_up()
         self.assertEqual(len(transfers), 2)
         amounts = sorted(t["amount"] for t in transfers)
         self.assertEqual(amounts, [100, 200])
@@ -64,9 +71,25 @@ class SettleUpTests(TestCase):
     def test_balances_sum_to_zero(self):
         Payment.objects.create(sender=self.alice, receiver=self.bob, amount=50, date="2026-01-01")
         Payment.objects.create(sender=self.bob, receiver=self.carol, amount=30, date="2026-01-02")
-        transfers = settle_up(self.alice)
+        transfers = settle_up()
         for t in transfers:
             self.assertGreater(t["amount"], 0)
+
+    def test_no_payments_returns_empty(self):
+        self.assertEqual(settle_up(), [])
+
+    def test_chain_collapses_to_endpoints(self):
+        """Alice→Bob→Carol→Dave: middle users net to zero, only the
+        endpoints remain."""
+        dave = User.objects.create_user("dave", password="pw")
+        Payment.objects.create(sender=self.alice, receiver=self.bob, amount=100, date="2026-01-01")
+        Payment.objects.create(sender=self.bob, receiver=self.carol, amount=100, date="2026-01-02")
+        Payment.objects.create(sender=self.carol, receiver=dave, amount=100, date="2026-01-03")
+        transfers = settle_up()
+        self.assertEqual(len(transfers), 1)
+        self.assertEqual(transfers[0]["from"], "dave")
+        self.assertEqual(transfers[0]["to"], "alice")
+        self.assertEqual(transfers[0]["amount"], 100)
 
 
 class MonthlyStatsTests(TestCase):
@@ -140,6 +163,14 @@ class SplitTests(TestCase):
         with self.assertRaises(ValueError):
             split_amount(10, [Decimal(0), Decimal(0)])
 
+    def test_single_participant_gets_everything(self):
+        self.assertEqual(split_amount(100, [Decimal(1)]), [100])
+
+    def test_one_dollar_three_people(self):
+        parts = split_amount(1, [Decimal(1), Decimal(1), Decimal(1)])
+        self.assertEqual(sum(parts), 1)
+        self.assertEqual(sorted(parts), [0, 0, 1])
+
 
 class GroupBuyTests(TestCase):
     def setUp(self):
@@ -177,10 +208,13 @@ class GroupBuyTests(TestCase):
         self.assertEqual(shares["carol"], 75)
 
     def test_payer_checked_is_skipped(self):
+        """Payer in the participant list: their weight is excluded from
+        the split so the others still receive the full amount."""
         response = self.post_split(participants=["alice", "bob", "carol"])
         self.assertRedirects(response, reverse("balances"))
         shares = {p.receiver.username: p.amount for p in Payment.objects.all()}
-        self.assertEqual(shares, {"bob": 33, "carol": 33})
+        self.assertEqual(shares, {"bob": 50, "carol": 50})
+        self.assertNotIn("alice", shares)
 
     def test_no_participants_rejected(self):
         response = self.post_split(participants=[])
@@ -197,6 +231,14 @@ class GroupBuyTests(TestCase):
         response = self.post_split(participants=["alice"])
         self.assertContains(response, "at least one other person")
         self.assertEqual(GroupPurchase.objects.count(), 0)
+
+    def test_payer_not_checked_excluded_from_split(self):
+        """When the payer isn't checked as a participant, their weight
+        isn't part of the split — the others get the full amount."""
+        self.post_split(participants=["bob", "carol"], weight_bob="1", weight_carol="1")
+        shares = {p.receiver.username: p.amount for p in Payment.objects.all()}
+        self.assertEqual(shares, {"bob": 50, "carol": 50})
+        self.assertNotIn("alice", shares)
 
 
 class AddRecordTests(TestCase):
@@ -307,6 +349,13 @@ class RecordsFilterTests(TestCase):
         self.assertIn(",50,", content)
         self.assertNotIn(",70,", content)
 
+    def test_csv_export_includes_ip_column(self):
+        Payment.objects.update(ip_address="192.168.1.1")
+        response = self.client.get(reverse("records_csv"))
+        content = response.content.decode()
+        self.assertIn("IP", content)
+        self.assertIn("192.168.1.1", content)
+
 
 class PageTests(TestCase):
     def setUp(self):
@@ -317,3 +366,111 @@ class PageTests(TestCase):
         for name in ("balances", "records", "add_record", "group_buy"):
             response = self.client.get(reverse(name))
             self.assertEqual(response.status_code, 200, name)
+
+
+class IpAddressTests(TestCase):
+    def setUp(self):
+        self.alice = User.objects.create_user("alice", password="pw")
+        self.bob = User.objects.create_user("bob", password="pw")
+        self.client.login(username="alice", password="pw")
+
+    def test_ip_saved_on_add_record(self):
+        self.client.post(
+            reverse("add_record"),
+            {"receiver": "bob", "amount": "50", "date": "2026-09-18", "note": "test"},
+            REMOTE_ADDR="10.0.0.1",
+        )
+        self.assertEqual(Payment.objects.get().ip_address, "10.0.0.1")
+
+    def test_ip_saved_on_group_buy(self):
+        self.client.post(
+            reverse("group_buy"),
+            {
+                "payer": "alice",
+                "amount": "100",
+                "date": "2026-09-18",
+                "participants": ["bob"],
+                "weight_bob": "1",
+            },
+            REMOTE_ADDR="10.0.0.2",
+        )
+        self.assertEqual(Payment.objects.get().ip_address, "10.0.0.2")
+
+    def test_x_forwarded_for_takes_precedence(self):
+        self.client.post(
+            reverse("add_record"),
+            {"receiver": "bob", "amount": "50", "date": "2026-09-18"},
+            REMOTE_ADDR="10.0.0.1",
+            HTTP_X_FORWARDED_FOR="203.0.113.5, 10.0.0.1",
+        )
+        self.assertEqual(Payment.objects.get().ip_address, "203.0.113.5")
+
+
+class PaginationTests(TestCase):
+    def setUp(self):
+        self.alice = User.objects.create_user("alice", password="pw")
+        self.bob = User.objects.create_user("bob", password="pw")
+        for i in range(26):
+            Payment.objects.create(sender=self.alice, receiver=self.bob, amount=i + 1, date="2026-09-01", note=f"n{i}")
+        self.client.login(username="alice", password="pw")
+
+    def test_first_page_shows_25(self):
+        response = self.client.get(reverse("records"))
+        self.assertEqual(response.context["page"].number, 1)
+        self.assertEqual(len(response.context["page"].object_list), 25)
+
+    def test_second_page_shows_remainder(self):
+        response = self.client.get(reverse("records"), {"page": "2"})
+        self.assertEqual(response.context["page"].number, 2)
+        self.assertEqual(len(response.context["page"].object_list), 1)
+
+    def test_pagination_preserves_filters(self):
+        response = self.client.get(reverse("records"), {"sender": "alice", "page": "2"})
+        self.assertEqual(response.context["page"].number, 2)
+        self.assertEqual(response.context["filters"]["sender"], "alice")
+
+    def test_csv_export_is_not_paginated(self):
+        """CSV export returns all records, not just the first page."""
+        response = self.client.get(reverse("records_csv"))
+        content = response.content.decode()
+        self.assertEqual(content.count("\n"), 27)
+
+
+class RedirectTests(TestCase):
+    def test_root_redirects_to_balances(self):
+        User.objects.create_user("alice", password="pw")
+        self.client.login(username="alice", password="pw")
+        response = self.client.get("/")
+        self.assertRedirects(response, reverse("balances"))
+
+
+class BalancesRenderingTests(TestCase):
+    def setUp(self):
+        self.alice = User.objects.create_user("alice", password="pw")
+        self.bob = User.objects.create_user("bob", password="pw")
+        self.client.login(username="alice", password="pw")
+
+    def test_settle_up_section_renders(self):
+        Payment.objects.create(sender=self.bob, receiver=self.alice, amount=100, date="2026-09-01")
+        response = self.client.get(reverse("balances"))
+        self.assertEqual(len(response.context["settle_up"]), 1)
+        self.assertContains(response, "To settle up")
+        self.assertContains(response, "alice")
+
+    def test_settle_up_section_hidden_when_no_debts(self):
+        response = self.client.get(reverse("balances"))
+        self.assertEqual(response.context["settle_up"], [])
+        self.assertNotContains(response, "To settle up")
+
+    def test_monthly_section_renders(self):
+        Payment.objects.create(sender=self.alice, receiver=self.bob, amount=50, date="2026-09-15")
+        Payment.objects.create(sender=self.alice, receiver=self.bob, amount=30, date="2026-09-20")
+        response = self.client.get(reverse("balances"))
+        self.assertEqual(len(response.context["monthly"]), 1)
+        self.assertContains(response, "Monthly totals")
+        self.assertContains(response, "$80")
+
+    def test_monthly_section_hidden_when_no_payments(self):
+        response = self.client.get(reverse("balances"))
+        self.assertEqual(response.context["monthly"], [])
+        self.assertNotContains(response, "Monthly totals")

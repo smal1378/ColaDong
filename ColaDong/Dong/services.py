@@ -67,9 +67,9 @@ def split_amount(total, weights):
     return parts
 
 
-def settle_up(user):
+def settle_up():
     """Suggest the minimal set of transfers that would settle all debts
-    in the group, from the perspective of `user`.
+    in the group.
 
     Returns a list of dicts: {"from": username, "to": username, "amount": int}
     """

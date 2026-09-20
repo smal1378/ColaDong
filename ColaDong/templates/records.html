@@ -8,7 +8,7 @@
 <div class="pagehead">
   <h1>Payments</h1>
   <p>Every payment recorded by the group, newest first.</p>
-  <a class="btn--link" href="{% url 'records_csv' %}?{{ query_string }}">Export CSV</a>
+  <a class="btn--link" href="{% url 'records_csv' %}{% if query_string %}?{{ query_string }}{% endif %}">Export CSV</a>
 </div>
 
 {% comment %}
@@ -91,7 +91,7 @@
           <td class="when">{{ r.date|date:"Y-m-d" }}</td>
           <td class="who">{{ r.sender }}</td>
           <td class="who">{{ r.receiver }}</td>
-          <td class="memo">{{ r.note|default:"—" }}</td>
+          <td class="memo">{% if r.group_purchase %}<span class="gp-badge" title="Part of a group purchase">gp</span> {% endif %}{{ r.note|default:"—" }}</td>
           <td class="memo">{{ r.ip_address|default:"—" }}</td>
           <td class="num"><span class="money">${{ r.amount|intcomma }}</span></td>
         </tr>
@@ -115,10 +115,10 @@
   {% if page.has_other_pages %}
   <nav class="pagination">
     {% if page.has_previous %}
-      <a class="btn btn--link" href="{% url 'records' %}?{{ query_string }}{% if query_string %}&{% else %}?{% endif %}page={{ page.previous_page_number }}">Previous</a>
+      <a class="btn btn--link" href="{% url 'records' %}{% if query_string %}?{{ query_string }}&{% else %}?{% endif %}page={{ page.previous_page_number }}">Previous</a>
     {% endif %}
     {% if page.has_next %}
-      <a class="btn btn--link" href="{% url 'records' %}?{{ query_string }}{% if query_string %}&{% else %}?{% endif %}page={{ page.next_page_number }}">Next</a>
+      <a class="btn btn--link" href="{% url 'records' %}{% if query_string %}?{{ query_string }}&{% else %}?{% endif %}page={{ page.next_page_number }}">Next</a>
     {% endif %}
   </nav>
   {% endif %}

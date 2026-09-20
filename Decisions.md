@@ -56,22 +56,18 @@ choices about *how the code is shaped*.
   the explicit declaration the form would accept 0 and its error message
   would say "0" instead of "1".
 - **The records filter is a `TemplateView` with GET**, not a POST form.
-  Filtered views are bookmarkable and shareable by URL. The `query_string`
-  context var carries the current filter params (minus `page`) into the
-  pagination links so filtering survives page changes.
+   Filtered views are bookmarkable and shareable by URL. The `query_string`
+   context var carries the current filter params (minus `page`) into the
+   pagination links so filtering survives page changes.
 - **Group-buy participants and weights are read from the request in the
-  view**, not as form fields: the weight inputs are named `weight_<username>`,
-  so their field names are dynamic. The static top of the form (payer,
-  amount, date, note) *is* a `GroupBuyForm`; the dynamic part is validated
-  by hand in `_save_split`.
+   view**, not as form fields: the weight inputs are named `weight_<username>`,
+   so their field names are dynamic. The static top of the form (payer,
+   amount, date, note) *is* a `GroupBuyForm`; the dynamic part is validated
+   by hand in `_save_split`.
 - **The group-buy save is wrapped in `transaction.atomic()`**: the
-  `GroupPurchase` row and all its `Payment` shares commit or roll back
-  together. The payer is excluded from the shares — they paid, they owe
-  nobody from this purchase.
-- **The records filter is a `TemplateView` with GET**, not a POST form.
-  Filtered views are bookmarkable and shareable by URL. The `query_string`
-  context var carries the current filter params (minus `page`) into the
-  pagination links so filtering survives page changes.
+   `GroupPurchase` row and all its `Payment` shares commit or roll back
+   together. The payer is excluded from the shares — they paid, they owe
+   nobody from this purchase.
 
 ## Django version traps
 
@@ -116,10 +112,21 @@ choices about *how the code is shaped*.
   receiver: the logged-in user becomes the receiver and the selected user
   becomes the sender. The sender dropdown is still excluded for `paid`
   but included for `borrowed` (you can record that someone else paid you).
-- **Settle-up suggestions** on the balances page. `settle_up(user)` in
-  `services.py` uses a greedy algorithm: sort creditors descending, sort
-  debtors ascending, match the largest pair, repeat. The sign convention
-  is `sent - received` (positive = creditor, negative = debtor).
+- **Settle-up suggestions** on the balances page. `settle_up()` in
+  `services.py` (no parameters — it computes global balances for all
+  users) uses a greedy algorithm: match the largest debtor with the
+  largest creditor, repeat. The sign convention is `sent - received`
+  (positive = creditor, negative = debtor).
 - **Monthly stats** on the balances page. `monthly_stats(user)` in
   `services.py` uses `TruncMonth` to group payments by month, showing
   total sent and received with counts, most recent first.
+- **Group-purchase badge** on the records page. A `<span class="gp-badge">`
+  appears in the note column when `r.group_purchase` is set, so group-buy
+  shares are visually distinguishable from direct payments at a glance.
+- **IP address logging.** Each `Payment` row records the client IP at
+  save time. `client_ip(request)` in `views.py` checks `X-Forwarded-For`
+  first, then falls back to `REMOTE_ADDR`. The IP appears in the records
+  list and in the CSV export.
+- **Password validators disabled** (`AUTH_PASSWORD_VALIDATORS = []`).
+  The friend group uses simple usernames; enforcing complexity rules
+  added friction without security benefit at this scale.

@@ -36,7 +36,7 @@
       </div>
 
       <div class="field">
-        <label for="id_receiver">{% if form.direction == 'borrowed' %}Paid by{% else %}Paid to{% endif %}</label>
+        <label for="id_receiver" id="receiver-label">{% if form.direction == 'borrowed' %}Paid by{% else %}Paid to{% endif %}</label>
         <select id="id_receiver" name="receiver" required>
           <option value="">Choose a person…</option>
           {% for u in users %}
@@ -83,4 +83,15 @@
   </div>
 </form>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('input[name="direction"]').forEach(r =>
+  r.addEventListener('change', () => {
+    document.getElementById('receiver-label').textContent =
+      document.querySelector('input[name="direction"]:checked').value === 'borrowed' ? 'Paid by' : 'Paid to';
+  })
+);
+</script>
 {% endblock %}

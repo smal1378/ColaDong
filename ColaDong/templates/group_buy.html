@@ -144,19 +144,24 @@
 
   function recalc() {
     var total  = parseInt(amount.value, 10) || 0;
+    var payer  = document.getElementById('id_payer').value;
     var active = [];
 
     rows.forEach(function (row) {
       var box    = row.querySelector('input[type=checkbox]');
       var weight = row.querySelector('.weight input');
       var share  = row.querySelector('.share');
+      var name   = box.value;
 
       weight.disabled = !box.checked;
       row.setAttribute('data-on', box.checked ? '1' : '0');
       share.classList.toggle('share--off', !box.checked);
 
-      if (box.checked) {
+      if (box.checked && name !== payer) {
         active.push({ share: share, w: Math.max(parseFloat(weight.value) || 0, 0) });
+      } else if (box.checked && name === payer) {
+        share.textContent = 'payer';
+        share.classList.remove('share--off');
       } else {
         share.innerHTML = '&mdash;';
       }
@@ -197,7 +202,7 @@
     if (e.target.closest('.split') || e.target === amount) { recalc(); }
   });
   document.addEventListener('change', function (e) {
-    if (e.target.closest('.split')) { recalc(); }
+    if (e.target.closest('.split') || e.target.id === 'id_payer') { recalc(); }
   });
 
   function setAll(state) {
