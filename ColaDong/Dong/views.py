@@ -237,9 +237,8 @@ class AddRecordView(FlatErrorMixin, LoginRequiredMixin, CreateView):
         context = super().get_context_data(**kwargs)
         context["users"] = User.objects.exclude(pk=self.request.user.pk).order_by("username")
         context["today"] = date.today().isoformat()
-        form = kwargs.get("form")
-        if form is not None:
-            context["form"] = refill_dict(form, "direction", "receiver", "amount", "date", "note")
+        form = kwargs.get("form") or context.get("form")
+        context["form"] = refill_dict(form, "direction", "receiver", "amount", "date", "note")
         return context
 
 
