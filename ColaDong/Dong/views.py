@@ -142,7 +142,7 @@ class GroupBuyView(LoginRequiredMixin, View):
         else:
             error = self._save_split(request, form, names, weights)
         if error is None:
-            return redirect("balances")
+            return redirect("dong:balances")
         return self._render(request, form=form, names=names, weights=weights, error=error)
 
     def _save_split(self, request, form, names, weights):
@@ -217,7 +217,7 @@ class AddRecordView(FlatErrorMixin, LoginRequiredMixin, CreateView):
     model = Payment
     form_class = PaymentForm
     template_name = "add_record.html"
-    success_url = reverse_lazy("balances")
+    success_url = reverse_lazy("dong:balances")
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()

@@ -76,8 +76,8 @@
   </div>
 
   <div class="sheet__foot">
-    <a class="btn" href="{% url 'add_record' %}">Record a payment</a>
-    <a class="btn btn--quiet" href="{% url 'group_buy' %}">Split a purchase</a>
+    <a class="btn" href="{% url 'dong:add_record' %}">Record a payment</a>
+    <a class="btn btn--quiet" href="{% url 'dong:group_buy' %}">Split a purchase</a>
   </div>
 
   {% if settle_up %}
@@ -131,7 +131,7 @@
   {% else %}
   <div class="empty">
     <p>Nothing on the tab yet.</p>
-    <a class="btn" href="{% url 'add_record' %}">Record the first payment</a>
+    <a class="btn" href="{% url 'dong:add_record' %}">Record the first payment</a>
   </div>
   {% endif %}
 </div>

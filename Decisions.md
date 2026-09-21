@@ -93,8 +93,8 @@ choices about *how the code is shaped*.
 - **`split_amount` is property-tested** over many (total, weights) pairs:
   parts are positive integers, sum exactly to the total, and the difference
   between any two parts is at most 1.
-- Run with `uv run python manage.py test Dong` from the `ColaDong/`
-  directory.
+- Run with `uv run python manage.py test` from the `ColaDong/`
+  directory (runs all apps: 63 tests).
 
 ## Added features (Sep 2026)
 
@@ -130,6 +130,42 @@ choices about *how the code is shaped*.
 - **Password validators disabled** (`AUTH_PASSWORD_VALIDATORS = []`).
   The friend group uses simple usernames; enforcing complexity rules
   added friction without security benefit at this scale.
+
+## Multi-app restructure (Sep 2026)
+
+- **Namespaced URLs** (`app_name` in each app's `urls.py`). Dong's URL
+  names now carry the `dong:` prefix. This avoids name collisions when
+  multiple apps define e.g. a `balances` or `week` pattern, and makes
+  `reverse()` calls unambiguous. The project-level `urls.py` uses
+  `include()` to mount each app under its own path prefix
+  (`/dong/`, `/ejlas/`, `/ip/`).
+- **Homepage at `/`** (`TemplateView` serving `home.html` with an
+  app-grid). `LOGIN_REDIRECT_URL` changed from `'balances'` to `'/'`
+  so new users land on the app picker, not directly into one app.
+- **Login/logout at project level**, not inside any app. All apps share
+  the same auth session.
+- **`base.html` nav generalized** with `{% block app_nav %}` so each
+  app's templates can add their own sub-navigation without editing the
+  base template.
+- **One CSS file** (`coladong.css`) shared across all apps via the
+  staticfiles framework. New app styles are appended to the same file
+  rather than creating per-app stylesheets — keeps the visual language
+  consistent and the asset pipeline simple.
+- **Ejlas: one `Meeting` model, no separate `Place` model.** Place is
+  a `CharField`; conflict detection compares case-insensitively. A
+  separate Place model would add FK management for no benefit at this
+  scale (a friend group uses a handful of rooms).
+- **Ejlas: conflict warnings are non-blocking.** The meeting saves
+  regardless; conflicts are shown as a warning table after the save.
+  The owner can override (e.g., two meetings in the same room at the
+  same time if one is cancelled in practice).
+- **Ejlas: week starts Saturday** (Iran calendar convention). Friday
+  is the only weekend day. The `week_start()` helper computes the
+  Saturday on or before the given date.
+- **IP Calculator: entirely client-side.** The Django view is a
+  `TemplateView` that serves the HTML; all subnet math runs in inline
+  JS. No model, no form, no POST. Stateless and instant — no server
+  round-trip for every keystroke.
 
 ## Deployment (Sep 2026)
 

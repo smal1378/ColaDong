@@ -1,24 +1,24 @@
-"""
-URL configuration for ColaDong project.
-"""
-from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
-from django.contrib.auth.views import LogoutView
-from django.urls import path
-from django.views.generic import RedirectView
+from django.contrib.auth import views as auth_views
+from django.urls import include, path
+from django.views.generic import TemplateView
 
-import Dong.views as views
+from Dong.views import ColaLoginView
+
+
+class HomePageView(TemplateView):
+    """Landing page after login: lists the available apps."""
+
+    template_name = "home.html"
+    login_required = True
+
 
 urlpatterns = [
-    path("", RedirectView.as_view(pattern_name="balances")),
     path("admin/", admin.site.urls),
-    path("login/", views.ColaLoginView.as_view(), name="login"),
-    path("logout/", LogoutView.as_view(), name="logout"),
-    path("balances/", views.BalancesView.as_view(), name="balances"),
-    path("records/", views.RecordsView.as_view(), name="records"),
-    path("records/export/", views.RecordsCsvView.as_view(), name="records_csv"),
-    path("add-record/", views.AddRecordView.as_view(), name="add_record"),
-    path("group-buy/", views.GroupBuyView.as_view(), name="group_buy"),
-    path("admin/coladong-update/", views.AdminUpdateView.as_view(), name="admin_update"),
-] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    path("", HomePageView.as_view(), name="home"),
+    path("login/", ColaLoginView.as_view(), name="login"),
+    path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("dong/", include("Dong.urls")),
+    path("ejlas/", include("Ejlas.urls")),
+    path("ip/", include("ipcalc.urls")),
+]

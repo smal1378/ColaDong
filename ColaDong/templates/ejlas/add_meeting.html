@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block app_nav %}
+  <a href="{% url 'ejlas:week' %}">Week board</a>
+  <a href="{% url 'ejlas:add' %}" aria-current="page">Add a meeting</a>
+{% endblock %}
+
+{% block title %}Add a meeting · Cola Dong{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <h1>Add a meeting</h1>
+  <p>Fill in the details. You'll be warned if it overlaps an existing meeting.</p>
+</div>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+  <div class="form-alert">
+    {% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}
+  </div>
+  {% endif %}
+
+  <label for="{{ form.note.id_for_label }}">Note</label>
+  <input type="text" id="{{ form.note.id_for_label }}" name="note"
+         maxlength="200" placeholder="e.g. Study group" value="{{ form.note.value|default:'' }}">
+
+  <label for="{{ form.start_time.id_for_label }}">Start time</label>
+  <input type="datetime-local" id="{{ form.start_time.id_for_label }}" name="start_time" required>
+  {% if form.start_time.errors %}<p class="field-error">{{ form.start_time.errors|join:", " }}</p>{% endif %}
+
+  <label for="{{ form.end_time.id_for_label }}">End time</label>
+  <input type="datetime-local" id="{{ form.end_time.id_for_label }}" name="end_time" required>
+  {% if form.end_time.errors %}<p class="field-error">{{ form.end_time.errors|join:", " }}</p>{% endif %}
+
+  <label for="{{ form.place.id_for_label }}">Place <small>(optional)</small></label>
+  <input type="text" id="{{ form.place.id_for_label }}" name="place"
+         maxlength="200" placeholder="e.g. Ali's office" value="{{ form.place.value|default:'' }}">
+
+  <fieldset>
+    <legend>Attendees</legend>
+    {% for checkbox in form.attendees %}
+    <label class="checkbox-row">{{ checkbox.tag }} {{ checkbox.choice_label }}</label>
+    {% endfor %}
+  </fieldset>
+
+  <div class="form-actions">
+    <button type="submit" class="btn">Save meeting</button>
+    <a class="btn btn--link" href="{% url 'ejlas:week' %}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

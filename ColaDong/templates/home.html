@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Apps · Cola Dong{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <h1>Apps</h1>
+  <p>Choose an app to get started.</p>
+</div>
+
+<div class="app-grid">
+
+  <a class="app-card" href="{% url 'dong:balances' %}">
+    <span class="app-card__name">Dong</span>
+    <span class="app-card__desc">Shared payment ledger — track who owes whom.</span>
+  </a>
+
+  <a class="app-card" href="{% url 'ejlas:week' %}">
+    <span class="app-card__name">Ejlas</span>
+    <span class="app-card__desc">Meeting planner — weekly board with conflict warnings.</span>
+  </a>
+
+  <a class="app-card" href="{% url 'ipcalc:calculator' %}">
+    <span class="app-card__name">IP Calculator</span>
+    <span class="app-card__desc">Subnet calculator — enter a CIDR, get the details.</span>
+  </a>
+
+</div>
+{% endblock %}

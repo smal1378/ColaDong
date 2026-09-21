@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block app_nav %}
+  <a href="{% url 'ejlas:week' %}" {% if request.resolver_match.url_name == 'week' %}aria-current="page"{% endif %}>Week board</a>
+  <a href="{% url 'ejlas:add' %}">Add a meeting</a>
+{% endblock %}
+
+{% block title %}Week board · Cola Dong{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <h1>Week board</h1>
+  <p>Meetings for the week of {{ week_start|date:"j M Y" }}.</p>
+</div>
+
+<div class="week-nav">
+  <a class="btn btn--quiet" href="?date={{ prev_date }}">← Prev week</a>
+  <a class="btn btn--quiet" href="?date={{ this_week_date }}">This week</a>
+  <a class="btn btn--quiet" href="?date={{ next_date }}">Next week →</a>
+</div>
+
+<div class="week-board">
+  {% for day in days %}
+  <div class="week-board__col">
+    <h2 class="week-board__day">{{ day.name }}</h2>
+    <time class="week-board__date" datetime="{{ day.date|date:"Y-m-d" }}">{{ day.date|date:"j M" }}</time>
+    {% for m in day.meetings %}
+    <div class="meeting-card">
+      <span class="meeting-card__time">{{ m.start_time|date:"H:i" }}–{{ m.end_time|date:"H:i" }}</span>
+      {% if m.note %}<span class="meeting-card__note">{{ m.note }}</span>{% endif %}
+      {% if m.place %}<span class="meeting-card__place">{{ m.place }}</span>{% endif %}
+    </div>
+    {% empty %}
+    <p class="week-board__empty">—</p>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+
+{% if conflicts %}
+<section class="conflicts">
+  <h2>Conflicts</h2>
+  <table>
+    <thead><tr><th>Meeting A</th><th>Meeting B</th><th>Type</th></tr></thead>
+    <tbody>
+      {% for c in conflicts %}
+      <tr>
+        <td>{{ c.a }}</td>
+        <td>{{ c.b }}</td>
+        <td>{% for t in c.types %}{{ t }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

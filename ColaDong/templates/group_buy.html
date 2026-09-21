@@ -39,7 +39,7 @@
   rounding rule you pick on the server, tell me and I'll match it here.
 {% endcomment %}
 
-<form method="post" action="{% url 'group_buy' %}" novalidate>
+<form method="post" action="{% url 'dong:group_buy' %}" novalidate>
   {% csrf_token %}
 
   <div class="sheet">

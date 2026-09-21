@@ -50,7 +50,7 @@ Recording a payment by Alice to Bob creates a row where
 - Common commands (run from the `ColaDong/` subdir, which holds
   `manage.py`):
   - `uv run python manage.py runserver`
-  - `uv run python manage.py test Dong`
+  - `uv run python manage.py test` (all apps, 63 tests)
   - `uv run python manage.py makemigrations` / `migrate`
 
 ### Django 6.x trap (already stepped on)
@@ -62,23 +62,37 @@ Recording a payment by Alice to Bob creates a row where
 ```
 ColaDong/                     <- repo root (git lives here)
   ColaDong/                   <- Django project dir (manage.py is here)
-    ColaDong/                 <- settings/urls
-    Dong/                     <- the app
+    ColaDong/                 <- settings/urls (project-level: home, login, includes)
+    Dong/                     <- shared ledger app (app_name="dong")
       models.py               Payment, GroupPurchase
-      views.py                all views (CBV + plain View mix)
+      views.py                Balances, AddRecord, Records, RecordsCsv, GroupBuy
       forms.py                PaymentForm, RecordFilterForm, GroupBuyForm
-      services.py             compute_balances(), split_amount()
-       admin.py                both models registered
-       tests.py                full test suite (54 tests)
-       migrations/0001_initial.py
-       migrations/0002_payment_ip_address.py
-    templates/                6 templates (base, login, balances, records,
-                              add_record, group_buy) — the frontend contract
-    static/css/coladong.css
+      services.py             compute_balances(), split_amount(), settle_up(),
+                              monthly_stats()
+      admin.py                both models registered
+      tests.py                54 tests
+      urls.py                 app_name="dong", 5 patterns
+      migrations/             0001_initial, 0002_payment_ip_address
+    Ejlas/                    <- meeting planner app (app_name="ejlas")
+      models.py               Meeting (start_time, end_time, place, attendees)
+      views.py                WeekBoardView, AddMeetingView
+      forms.py                MeetingForm
+      services.py             times_overlap(), find_conflicts(), find_week_conflicts()
+      admin.py                MeetingAdmin
+      tests.py                9 tests
+      urls.py                 app_name="ejlas", 2 patterns
+      migrations/0001_initial.py
+    ipcalc/                   <- subnet calculator (app_name="ipcalc", stateless)
+      views.py                CalculatorView (serves template, all logic in JS)
+      urls.py                 app_name="ipcalc", 1 pattern
+    templates/                base, home, login, balances, add_record,
+                              records, group_buy, ejlas/ (2), ipcalc/ (1)
+    static/css/coladong.css   shared design system (all apps)
   CONTEXT.md                  why things are shaped this way
   BACKEND_GUIDE.md            original build walkthrough
   README_UI.md                frontend handoff contract
   Decisions.md                implementation decision log
+  PLAN.md                     restructure + new apps plan
   RETURN.txt                  sync flag (see §8)
   AgentStartHere.md           <- you are here
 ```
@@ -186,10 +200,28 @@ Field names:
     env-var aware (`DJANGO_SECRET_KEY`, `DJANGO_DEBUG`,
     `DJANGO_ALLOWED_HOSTS`, `DJANGO_STATIC_ROOT`).
 
+16. Multi-app restructure: `Dong/urls.py` with `app_name="dong"`,
+    project `urls.py` reorganized (homepage at `/`, login/logout at
+    project level, `include()` for each app), `templates/home.html`
+    (app grid), `base.html` nav generalized with `{% block app_nav %}`,
+    all Dong templates/views updated to `dong:` namespace,
+    `LOGIN_REDIRECT_URL` → `'/'`.
+
+17. Ejlas app: `Meeting` model (start/end datetime, place, attendees
+    M2M), `WeekBoardView` (6-day Sat–Thu grid with week navigation),
+    `AddMeetingView` (form + non-blocking conflict warnings),
+    `services.py` (times_overlap, find_conflicts, find_week_conflicts),
+    `MeetingForm`, `MeetingAdmin`, 2 templates, 9 tests, initial
+    migration.
+
+18. IP Calculator app: `ipcalc` (stateless, single page),
+    `templates/ipcalc/calculator.html` with inline JS (ipToNum,
+    numToIp, maskFromPrefix, compute, classify), CSS for the results
+    grid.
+
 ### Not started
-- Nothing blocking. The core, the features pass, and the deployment
-  scripts are done and committed; all 54 tests pass. See §9 for the
-  remaining open questions (CSP and owner sign-off on the docs).
+- Nothing blocking. All three apps are implemented; 63 tests pass.
+  See §9 for remaining open questions.
 
 ## 8. The RETURN.txt protocol
 

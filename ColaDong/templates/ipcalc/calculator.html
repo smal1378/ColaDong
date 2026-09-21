@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block app_nav %}
+  <a href="{% url 'ipcalc:calculator' %}" aria-current="page">Calculator</a>
+{% endblock %}
+
+{% block title %}IP Calculator · Cola Dong{% endblock %}
+
+{% block content %}
+<div class="pagehead">
+  <h1>IP Calculator</h1>
+  <p>Enter a network address and prefix length (or a full CIDR like <code>192.168.0.0/16</code>).</p>
+</div>
+
+<div class="ipcalc">
+  <div class="ipcalc__input">
+    <label for="cidr-input">CIDR or network</label>
+    <input type="text" id="cidr-input" class="ipcalc__field" placeholder="192.168.0.0/16" autocomplete="off" spellcheck="false">
+  </div>
+
+  <div class="ipcalc__results" id="results" hidden>
+    <dl class="ipcalc__dl">
+      <dt>Network address</dt><dd id="r-net">—</dd>
+      <dt>Broadcast address</dt><dd id="r-bcast">—</dd>
+      <dt>Subnet mask</dt><dd id="r-mask">—</dd>
+      <dt>Wildcard mask</dt><dd id="r-wild">—</dd>
+      <dt>First usable host</dt><dd id="r-first">—</dd>
+      <dt>Last usable host</dt><dd id="r-last">—</dd>
+      <dt>Total addresses</dt><dd id="r-total">—</dd>
+      <dt>Usable hosts</dt><dd id="r-hosts">—</dd>
+      <dt>Address range</dt><dd id="r-range">—</dd>
+      <dt>Classification</dt><dd id="r-class">—</dd>
+    </dl>
+  </div>
+
+  <p class="ipcalc__error" id="error" hidden></p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  var input = document.getElementById('cidr-input');
+  var results = document.getElementById('results');
+  var errorEl = document.getElementById('error');
+
+  function ipToNum(ip) {
+    var parts = ip.split('.');
+    if (parts.length !== 4) return null;
+    var n = 0;
+    for (var i = 0; i < 4; i++) {
+      var octet = parseInt(parts[i], 10);
+      if (isNaN(octet) || octet < 0 || octet > 255) return null;
+      n = (n << 8) | octet;
+    }
+    return n >>> 0;
+  }
+
+  function numToIp(n) {
+    return ((n >>> 24) & 255) + '.' + ((n >>> 16) & 255) + '.' + ((n >>> 8) & 255) + '.' + (n & 255);
+  }
+
+  function maskFromPrefix(prefix) {
+    if (prefix === 0) return 0;
+    var mask = (0xFFFFFFFF << (32 - prefix)) >>> 0;
+    return mask;
+  }
+
+  function classify(ip) {
+    var first = (ip >>> 24) & 255;
+    if (first === 10) return 'Private (10.0.0.0/8)';
+    if (first === 172 && ((ip >>> 16) & 255) >= 16 && ((ip >>> 16) & 255) <= 31) return 'Private (172.16.0.0/12)';
+    if (first === 192 && ((ip >>> 16) & 255) === 168) return 'Private (192.168.0.0/16)';
+    if (first === 169 && ((ip >>> 16) & 255) === 254) return 'Link-local';
+    if (first === 127) return 'Loopback';
+    if (first >= 224 && first <= 239) return 'Multicast';
+    if (first >= 240) return 'Reserved';
+    if (first >= 1 && first <= 126) {
+      if (first < 128) return 'Public Class A';
+      if (first < 192) return 'Public Class B';
+      return 'Public Class C';
+    }
+    return 'Reserved';
+  }
+
+  function compute() {
+    var val = input.value.trim();
+    errorEl.hidden = true;
+    results.hidden = true;
+
+    if (!val) return;
+
+    var net, prefix;
+
+    if (val.indexOf('/') !== -1) {
+      var parts = val.split('/');
+      if (parts.length !== 2) { showError('Invalid format.'); return; }
+      net = ipToNum(parts[0]);
+      prefix = parseInt(parts[1], 10);
+    } else {
+      var m = val.match(/^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(\d{1,2})$/);
+      if (m) {
+        net = ipToNum(m[1]);
+        prefix = parseInt(m[2], 10);
+      } else {
+        net = ipToNum(val);
+        prefix = null;
+      }
+    }
+
+    if (net === null) { showError('Invalid IP address.'); return; }
+    if (prefix === null || prefix < 0 || prefix > 32) { showError('Invalid or missing prefix (0–32).'); return; }
+
+    var mask = maskFromPrefix(prefix);
+    var network = (net & mask) >>> 0;
+    var broadcast = (network | (~mask >>> 0)) >>> 0;
+    var total = Math.pow(2, 32 - prefix);
+    var usable = (prefix >= 30) ? total : (total - 2);
+
+    var firstHost = (prefix >= 30) ? network : (network + 1) >>> 0;
+    var lastHost = (prefix >= 30) ? broadcast : (broadcast - 1) >>> 0;
+
+    document.getElementById('r-net').textContent = numToIp(network) + '/' + prefix;
+    document.getElementById('r-bcast').textContent = (prefix === 32) ? '—' : numToIp(broadcast);
+    document.getElementById('r-mask').textContent = numToIp(mask);
+    document.getElementById('r-wild').textContent = numToIp((~mask) >>> 0);
+    document.getElementById('r-first').textContent = numToIp(firstHost);
+    document.getElementById('r-last').textContent = numToIp(lastHost);
+    document.getElementById('r-total').textContent = total.toLocaleString();
+    document.getElementById('r-hosts').textContent = usable.toLocaleString();
+    document.getElementById('r-range').textContent = numToIp(firstHost) + ' – ' + numToIp(lastHost);
+    document.getElementById('r-class').textContent = classify(network);
+
+    results.hidden = false;
+  }
+
+  function showError(msg) {
+    errorEl.textContent = msg;
+    errorEl.hidden = false;
+  }
+
+  input.addEventListener('input', compute);
+})();
+</script>
+{% endblock %}

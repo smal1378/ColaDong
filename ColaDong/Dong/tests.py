@@ -117,7 +117,7 @@ class MonthlyStatsTests(TestCase):
 
 class AuthTests(TestCase):
     def test_pages_require_login(self):
-        for name in ("balances", "records", "add_record", "group_buy"):
+        for name in ("dong:balances", "dong:records", "dong:add_record", "dong:group_buy"):
             response = self.client.get(reverse(name))
             self.assertRedirects(response, f"{reverse('login')}?next={reverse(name)}")
 
@@ -190,11 +190,11 @@ class GroupBuyTests(TestCase):
             "weight_carol": "1",
         }
         data.update(overrides)
-        return self.client.post(reverse("group_buy"), data)
+        return self.client.post(reverse("dong:group_buy"), data)
 
     def test_split_creates_purchase_and_shares(self):
         response = self.post_split()
-        self.assertRedirects(response, reverse("balances"))
+        self.assertRedirects(response, reverse("dong:balances"))
         self.assertEqual(GroupPurchase.objects.count(), 1)
         purchase = GroupPurchase.objects.get()
         self.assertEqual(purchase.payer, self.alice)
@@ -211,7 +211,7 @@ class GroupBuyTests(TestCase):
         """Payer in the participant list: their weight is excluded from
         the split so the others still receive the full amount."""
         response = self.post_split(participants=["alice", "bob", "carol"])
-        self.assertRedirects(response, reverse("balances"))
+        self.assertRedirects(response, reverse("dong:balances"))
         shares = {p.receiver.username: p.amount for p in Payment.objects.all()}
         self.assertEqual(shares, {"bob": 50, "carol": 50})
         self.assertNotIn("alice", shares)
@@ -250,11 +250,11 @@ class AddRecordTests(TestCase):
     def post_record(self, **overrides):
         data = {"receiver": "bob", "amount": "100", "date": "2026-09-18", "note": "Dinner"}
         data.update(overrides)
-        return self.client.post(reverse("add_record"), data)
+        return self.client.post(reverse("dong:add_record"), data)
 
     def test_valid_payment_saved_and_redirects(self):
         response = self.post_record()
-        self.assertRedirects(response, reverse("balances"))
+        self.assertRedirects(response, reverse("dong:balances"))
         payment = Payment.objects.get()
         self.assertEqual(payment.sender, self.alice)
         self.assertEqual(payment.receiver, self.bob)
@@ -267,7 +267,7 @@ class AddRecordTests(TestCase):
 
     def test_borrowed_direction_swaps_sender_receiver(self):
         response = self.post_record(direction="borrowed")
-        self.assertRedirects(response, reverse("balances"))
+        self.assertRedirects(response, reverse("dong:balances"))
         payment = Payment.objects.get()
         self.assertEqual(payment.sender, self.bob)
         self.assertEqual(payment.receiver, self.alice)
@@ -305,14 +305,14 @@ class RecordsFilterTests(TestCase):
         self.client.login(username="alice", password="pw")
 
     def test_filter_by_sender(self):
-        response = self.client.get(reverse("records"), {"sender": "alice"})
+        response = self.client.get(reverse("dong:records"), {"sender": "alice"})
         self.assertContains(response, "a")
         self.assertNotContains(response, "note b")
         self.assertContains(response, "matching these filters")
 
     def test_filter_by_date_range(self):
         response = self.client.get(
-            reverse("records"),
+            reverse("dong:records"),
             {"date_from": "2026-09-10", "date_to": "2026-09-20"},
         )
         self.assertContains(response, "b")
@@ -321,18 +321,18 @@ class RecordsFilterTests(TestCase):
     def test_inverted_dates_show_all(self):
         """An invalid date range is ignored; all records are shown."""
         response = self.client.get(
-            reverse("records"),
+            reverse("dong:records"),
             {"date_from": "2026-09-20", "date_to": "2026-09-01"},
         )
         self.assertContains(response, "a")
         self.assertContains(response, "b")
 
     def test_total_amount(self):
-        response = self.client.get(reverse("records"))
+        response = self.client.get(reverse("dong:records"))
         self.assertContains(response, "$120")
 
     def test_csv_export(self):
-        response = self.client.get(reverse("records_csv"))
+        response = self.client.get(reverse("dong:records_csv"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "text/csv; charset=utf-8")
         self.assertIn("attachment", response["Content-Disposition"])
@@ -344,14 +344,14 @@ class RecordsFilterTests(TestCase):
         self.assertIn(",70,", content)
 
     def test_csv_export_respects_filters(self):
-        response = self.client.get(reverse("records_csv"), {"sender": "alice"})
+        response = self.client.get(reverse("dong:records_csv"), {"sender": "alice"})
         content = response.content.decode()
         self.assertIn(",50,", content)
         self.assertNotIn(",70,", content)
 
     def test_csv_export_includes_ip_column(self):
         Payment.objects.update(ip_address="192.168.1.1")
-        response = self.client.get(reverse("records_csv"))
+        response = self.client.get(reverse("dong:records_csv"))
         content = response.content.decode()
         self.assertIn("IP", content)
         self.assertIn("192.168.1.1", content)
@@ -363,7 +363,7 @@ class PageTests(TestCase):
         self.client.login(username="alice", password="pw")
 
     def test_pages_render(self):
-        for name in ("balances", "records", "add_record", "group_buy"):
+        for name in ("dong:balances", "dong:records", "dong:add_record", "dong:group_buy"):
             response = self.client.get(reverse(name))
             self.assertEqual(response.status_code, 200, name)
 
@@ -376,7 +376,7 @@ class IpAddressTests(TestCase):
 
     def test_ip_saved_on_add_record(self):
         self.client.post(
-            reverse("add_record"),
+            reverse("dong:add_record"),
             {"receiver": "bob", "amount": "50", "date": "2026-09-18", "note": "test"},
             REMOTE_ADDR="10.0.0.1",
         )
@@ -384,7 +384,7 @@ class IpAddressTests(TestCase):
 
     def test_ip_saved_on_group_buy(self):
         self.client.post(
-            reverse("group_buy"),
+            reverse("dong:group_buy"),
             {
                 "payer": "alice",
                 "amount": "100",
@@ -398,7 +398,7 @@ class IpAddressTests(TestCase):
 
     def test_x_forwarded_for_takes_precedence(self):
         self.client.post(
-            reverse("add_record"),
+            reverse("dong:add_record"),
             {"receiver": "bob", "amount": "50", "date": "2026-09-18"},
             REMOTE_ADDR="10.0.0.1",
             HTTP_X_FORWARDED_FOR="203.0.113.5, 10.0.0.1",
@@ -415,33 +415,34 @@ class PaginationTests(TestCase):
         self.client.login(username="alice", password="pw")
 
     def test_first_page_shows_25(self):
-        response = self.client.get(reverse("records"))
+        response = self.client.get(reverse("dong:records"))
         self.assertEqual(response.context["page"].number, 1)
         self.assertEqual(len(response.context["page"].object_list), 25)
 
     def test_second_page_shows_remainder(self):
-        response = self.client.get(reverse("records"), {"page": "2"})
+        response = self.client.get(reverse("dong:records"), {"page": "2"})
         self.assertEqual(response.context["page"].number, 2)
         self.assertEqual(len(response.context["page"].object_list), 1)
 
     def test_pagination_preserves_filters(self):
-        response = self.client.get(reverse("records"), {"sender": "alice", "page": "2"})
+        response = self.client.get(reverse("dong:records"), {"sender": "alice", "page": "2"})
         self.assertEqual(response.context["page"].number, 2)
         self.assertEqual(response.context["filters"]["sender"], "alice")
 
     def test_csv_export_is_not_paginated(self):
         """CSV export returns all records, not just the first page."""
-        response = self.client.get(reverse("records_csv"))
+        response = self.client.get(reverse("dong:records_csv"))
         content = response.content.decode()
         self.assertEqual(content.count("\n"), 27)
 
 
 class RedirectTests(TestCase):
-    def test_root_redirects_to_balances(self):
+    def test_root_serves_homepage(self):
         User.objects.create_user("alice", password="pw")
         self.client.login(username="alice", password="pw")
         response = self.client.get("/")
-        self.assertRedirects(response, reverse("balances"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Apps")
 
 
 class BalancesRenderingTests(TestCase):
@@ -452,25 +453,25 @@ class BalancesRenderingTests(TestCase):
 
     def test_settle_up_section_renders(self):
         Payment.objects.create(sender=self.bob, receiver=self.alice, amount=100, date="2026-09-01")
-        response = self.client.get(reverse("balances"))
+        response = self.client.get(reverse("dong:balances"))
         self.assertEqual(len(response.context["settle_up"]), 1)
         self.assertContains(response, "To settle up")
         self.assertContains(response, "alice")
 
     def test_settle_up_section_hidden_when_no_debts(self):
-        response = self.client.get(reverse("balances"))
+        response = self.client.get(reverse("dong:balances"))
         self.assertEqual(response.context["settle_up"], [])
         self.assertNotContains(response, "To settle up")
 
     def test_monthly_section_renders(self):
         Payment.objects.create(sender=self.alice, receiver=self.bob, amount=50, date="2026-09-15")
         Payment.objects.create(sender=self.alice, receiver=self.bob, amount=30, date="2026-09-20")
-        response = self.client.get(reverse("balances"))
+        response = self.client.get(reverse("dong:balances"))
         self.assertEqual(len(response.context["monthly"]), 1)
         self.assertContains(response, "Monthly totals")
         self.assertContains(response, "$80")
 
     def test_monthly_section_hidden_when_no_payments(self):
-        response = self.client.get(reverse("balances"))
+        response = self.client.get(reverse("dong:balances"))
         self.assertEqual(response.context["monthly"], [])
         self.assertNotContains(response, "Monthly totals")

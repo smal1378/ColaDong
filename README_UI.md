@@ -1,19 +1,26 @@
 # Cola Dong — frontend handoff
 
-Six templates and one stylesheet. No build step, no JS framework. The only
-JavaScript is ~50 lines on the split page for the live preview, and the page
-still submits correctly with JS disabled.
+Templates and one shared stylesheet. No build step, no JS framework. The
+only JavaScript is ~50 lines on the split page for the live preview, and the
+page still submits correctly with JS disabled. The IP Calculator page has
+~80 lines of client-side subnet math.
 
 ```
 templates/
-  base.html        header + shared shell, every page extends this
+  base.html          header + shared shell, every page extends this
+  home.html          app picker (landing page)
   login.html
-  balances.html
-  add_record.html
-  records.html
-  group_buy.html
+  balances.html      Dong: running balances + settle-up + monthly
+  add_record.html    Dong: record a payment
+  records.html       Dong: payment list with filters
+  group_buy.html     Dong: split a group purchase
+  ejlas/
+    week.html        Ejlas: weekly meeting board
+    add_meeting.html Ejlas: add meeting form
+  ipcalc/
+    calculator.html  IP Calculator: stateless subnet tool
 static/css/
-  coladong.css
+  coladong.css       shared across all apps
 ```
 
 ## Setup

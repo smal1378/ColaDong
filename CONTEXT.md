@@ -11,19 +11,28 @@ up cold, read this first.
 
 ## What this is
 
-Cola Dong is a weekend project: a shared ledger for a friend group. Each
-friend has a plain Django `User` account. The core mechanic, stated
-exactly as the project's owner described it:
+Cola Dong is a multi-app platform for a friend group, built as a weekend
+project. Three apps share one Django project, one theme, one auth session:
 
-> if I pay you $100 today, it gets recorded, and then you owe me $100.
-> If you then give someone else $100, they owe you $100 instead.
+- **Dong** (the original) — a shared ledger. Each friend has a plain
+  Django `User` account. The core mechanic:
 
-That's the whole domain. Everything else in the app is UI and
-bookkeeping around that one mechanic, plus one extension of it: a group
-purchase, where one person pays and several people owe them a share.
+  > if I pay you $100 today, it gets recorded, and then you owe me $100.
+  > If you then give someone else $100, they owe you $100 instead.
 
-**The non-obvious part, worth stating plainly because it's easy to get
-backwards:** recording a payment creates a debt in the *opposite*
+  Plus one extension: a group purchase, where one person pays and
+  several people owe them a share.
+
+- **Ejlas** — a weekly meeting board (Saturday–Thursday, Iran calendar).
+  Track meetings with attendees and places; get conflict warnings when
+  two meetings overlap for the same person or the same room.
+
+- **IP Calculator** — a stateless subnet calculator (CIDR → network,
+  broadcast, usable hosts, mask, classification). All logic is client-side
+  JS; the Django view just serves the page.
+
+**The non-obvious part of Dong, worth stating plainly because it's easy
+to get backwards:** recording a payment creates a debt in the *opposite*
 direction from the money. If Alice pays Bob, Bob now owes Alice — Bob
 received cash, Bob owes it back. This is a lending ledger, not a shared
 expense-splitting ledger in the Splitwise sense, even though the group-buy

@@ -8,7 +8,7 @@
 <div class="pagehead">
   <h1>Payments</h1>
   <p>Every payment recorded by the group, newest first.</p>
-  <a class="btn--link" href="{% url 'records_csv' %}{% if query_string %}?{{ query_string }}{% endif %}">Export CSV</a>
+  <a class="btn--link" href="{% url 'dong:records_csv' %}{% if query_string %}?{{ query_string }}{% endif %}">Export CSV</a>
 </div>
 
 {% comment %}
@@ -28,7 +28,7 @@
 
 <div class="sheet">
 
-  <form method="get" action="{% url 'records' %}" class="filters">
+  <form method="get" action="{% url 'dong:records' %}" class="filters">
 
     <div class="field">
       <label for="f_sender">Paid by</label>
@@ -67,7 +67,7 @@
     <div class="filters__actions">
       <button type="submit" class="btn">Apply filters</button>
       {% if filters.sender or filters.receiver or filters.date_from or filters.date_to %}
-        <a class="btn--link" href="{% url 'records' %}">Clear all</a>
+        <a class="btn--link" href="{% url 'dong:records' %}">Clear all</a>
       {% endif %}
     </div>
   </form>
@@ -115,10 +115,10 @@
   {% if page.has_other_pages %}
   <nav class="pagination">
     {% if page.has_previous %}
-      <a class="btn btn--link" href="{% url 'records' %}{% if query_string %}?{{ query_string }}&{% else %}?{% endif %}page={{ page.previous_page_number }}">Previous</a>
+      <a class="btn btn--link" href="{% url 'dong:records' %}{% if query_string %}?{{ query_string }}&{% else %}?{% endif %}page={{ page.previous_page_number }}">Previous</a>
     {% endif %}
     {% if page.has_next %}
-      <a class="btn btn--link" href="{% url 'records' %}{% if query_string %}?{{ query_string }}&{% else %}?{% endif %}page={{ page.next_page_number }}">Next</a>
+      <a class="btn btn--link" href="{% url 'dong:records' %}{% if query_string %}?{{ query_string }}&{% else %}?{% endif %}page={{ page.next_page_number }}">Next</a>
     {% endif %}
   </nav>
   {% endif %}
@@ -129,7 +129,7 @@
       <p>No payments match these filters. Widen the dates or clear one of them.</p>
     {% else %}
       <p>No payments recorded yet.</p>
-      <a class="btn" href="{% url 'add_record' %}">Record the first payment</a>
+      <a class="btn" href="{% url 'dong:add_record' %}">Record the first payment</a>
     {% endif %}
   </div>
   {% endif %}

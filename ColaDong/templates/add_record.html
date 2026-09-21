@@ -21,7 +21,7 @@
   On success redirect to the balances page; on failure re-render with `error`.
 {% endcomment %}
 
-<form method="post" action="{% url 'add_record' %}" novalidate>
+<form method="post" action="{% url 'dong:add_record' %}" novalidate>
   {% csrf_token %}
 
   <div class="sheet">
@@ -78,7 +78,7 @@
 
     <div class="sheet__foot">
       <button type="submit" class="btn">Save payment</button>
-      <a class="btn--link" href="{% url 'balances' %}">Cancel</a>
+      <a class="btn--link" href="{% url 'dong:balances' %}">Cancel</a>
     </div>
   </div>
 </form>
