@@ -31,8 +31,12 @@ static/css/
 3. `django.template.context_processors.request` must be on (it is by default).
    The header uses `request.resolver_match.url_name` to underline the current
    tab, which saves you passing an `active` variable to every view.
-4. Name your URLs: `balances`, `records`, `add_record`, `group_buy`, `login`,
-   `logout`. Rename them if you like, just update `{% url %}` in the templates.
+4. Name your URLs — the app is namespaced, so use `dong:balances`,
+   `dong:records`, `dong:add_record`, `dong:group_buy`, plus the project-level
+   `home`, `login`, `logout`. Rename them if you like, just update
+   `{% url %}` in the templates. The header highlights the current tab via
+   `request.resolver_match.url_name` (the bare name, without the namespace),
+   so it works across all three apps.
 
 Fonts load from Google Fonts. If you'd rather not hit the network, drop the two
 `<link>` tags in `base.html` — the CSS falls back to system fonts cleanly.
@@ -72,7 +76,7 @@ Set the page title from a child with `{% block title %}`.
 | `next` | str | optional, written to a hidden input |
 
 POSTs `username`, `password` (and `next` if present). On success redirect to
-`next` or `balances`; on failure re-render with `error`.
+`next` or `/` (the homepage app picker); on failure re-render with `error`.
 
 ## 3. `balances.html`
 
@@ -114,7 +118,7 @@ def balances(request):
 back in and it works.
 
 POST fields: `receiver` (username), `amount` (int), `date` (`YYYY-MM-DD`),
-`note` (may be empty). Redirect to `balances` on success.
+`note` (may be empty). Redirect to `dong:balances` on success.
 
 > Note on `today`: pass it as a **string**, not a `date`. The `|date:` filter
 > silently renders empty when it gets a string back from `request.POST`, so the
@@ -125,39 +129,42 @@ POST fields: `receiver` (username), `amount` (int), `date` (`YYYY-MM-DD`),
 | Context | Type | Notes |
 |---|---|---|
 | `users` | iterable | fills both filter dropdowns |
-| `records` | iterable | newest first |
+| `page` | Django `Page` | the current page (25 rows) — iterating it yields the records |
 | `filters` | dict | the filters currently applied, refills the form |
-| `total_amount` | int | optional, sum of the filtered rows |
+| `total_amount` | int | optional, sum of the *filtered* rows (all pages) |
+| `query_string` | str | current filter params minus `page`, appended to pagination + CSV links |
 
 Each record: `.date` (a real `date`), `.sender`, `.receiver` (str or `User`),
-`.amount` (int), `.note`.
+`.amount` (int), `.note`, `.group_purchase` (None or a `GroupPurchase` — renders
+the `gp` badge), `.ip_address`.
 
 `filters` keys: `sender`, `receiver`, `date_from`, `date_to` — empty string means
 no constraint. Pass `{}` on first load.
 
-The filter form POSTs back to the same URL with exactly those four field names.
-"Clear all" is just a link back to the bare URL, so handle the unfiltered case
-in your GET branch and you're done.
+The filter form **GETs** back to the same URL with exactly those four field
+names, so filtered views are bookmarkable. "Clear all" is just a link back to
+the bare URL — handle the unfiltered case in your GET branch and you're done.
+No `{% csrf_token %}` needed (GET requests don't carry one).
 
 ```python
 def records(request):
-    f = {k: request.POST.get(k, "") for k in ("sender", "receiver", "date_from", "date_to")}
-    qs = Record.objects.select_related("sender", "receiver").order_by("-date", "-id")
+    f = {k: request.GET.get(k, "") for k in ("sender", "receiver", "date_from", "date_to")}
+    qs = Payment.objects.select_related("sender", "receiver").order_by("-date", "-id")
     if f["sender"]:    qs = qs.filter(sender__username=f["sender"])
     if f["receiver"]:  qs = qs.filter(receiver__username=f["receiver"])
     if f["date_from"]: qs = qs.filter(date__gte=f["date_from"])
     if f["date_to"]:   qs = qs.filter(date__lte=f["date_to"])
+    page = Paginator(qs, 25).get_page(request.GET.get("page"))
     return render(request, "records.html", {
         "users": User.objects.order_by("username"),
-        "records": qs,
+        "page": page,
         "filters": f,
         "total_amount": qs.aggregate(s=Sum("amount"))["s"] or 0,
     })
 ```
 
-If you'd rather have shareable filter URLs, switch `method="post"` to `"get"`,
-drop the `{% csrf_token %}`, and read `request.GET` instead. The field names
-don't change.
+The CSV export (`dong:records_csv`) applies the same filters and streams the
+whole (unpaged) result set as `text/csv; charset=utf-8`.
 
 ## 6. `group_buy.html`
 
@@ -192,22 +199,22 @@ total_w = sum(weights.values())
 ```
 
 The page previews each person's share live using **largest-remainder rounding**,
-so the parts always add back up to the total with no cents left over. Tell me
-what rule you use server-side and I'll make the preview match it exactly.
+so the parts always add back up to the total with no cents left over. The backend
+uses the same rule (`split_amount()` in `Dong/services.py`), and the two must
+never diverge — if you change one side, change the other.
 
 The payer can be in the participant list or not — the UI doesn't care, and
 either way the payer's own share nets out to zero against what they laid out.
 
 ---
 
-## Things worth deciding before you wire it up
+## Things decided since the handoff
 
-- **Duplicate prevention.** Nothing stops a double-submit on the two forms.
-  Cheapest fix is a redirect after a successful POST, which the flow already
-  assumes.
-- **Self-payment.** `add_record.html` only lists other users, but nothing stops
-  a crafted POST. Validate it server-side.
-- **Editing and deleting records.** Not in the brief, so there's no UI for it.
-  Say the word and I'll add a row action plus a confirm step.
-- **Pagination on `records.html`.** The table takes any number of rows but gets
-  unwieldy past a few hundred. Easy to add if you want it.
+- **Redirect after POST.** Both forms redirect on success (add-record →
+  `dong:balances`, group-buy → `dong:balances`), which also stops
+  accidental double-submits.
+- **Self-payment.** Enforced server-side: `PaymentForm` rejects
+  `receiver == sender`, and a DB `CheckConstraint` backs it up.
+- **Editing and deleting records.** Still not in scope — no UI for it.
+- **Pagination on `records.html`.** Done — 25 rows per page, filter params
+  carried in the pagination links via `query_string`.

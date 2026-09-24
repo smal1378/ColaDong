@@ -1,5 +1,13 @@
 # Cola Dong — backend guide
 
+> **Status:** this guide was written *before* the backend was implemented,
+> as a teaching walkthrough for the owner to build against. The backend is
+> now built and tested (63 tests, all three apps). Keep it as a reference
+> for *how* the pieces work — but treat the code, `README_UI.md`, and
+> `agent/DECISIONS.md` as the source of truth, not the snippets here (a few
+> have drifted, e.g. the records filter is now GET and URL names carry the
+> `dong:` namespace).
+
 This is a map, not the code. Everywhere it matters I'll tell you the Django
 tool for the job and show a *small* illustrative snippet — not the finished
 view or model — so you're the one writing `models.py` and `views.py`. Where
@@ -28,7 +36,7 @@ Six pages, six things the server needs to do:
 |---|---|---|
 | Sign in | `login` | Django's built-in auth view, lightly wrapped |
 | Balances | `balances` | a read-only aggregation query |
-| Payments list | `records` | a filtered list, filters via POST |
+| Payments list | `records` | a filtered, paginated list, filters via GET |
 | Add a payment | `add_record` | a `ModelForm`, one row created |
 | Split a purchase | `group_buy` | custom POST parsing, several rows created atomically |
 | Sign out | `logout` | Django's built-in view, POST-only |
@@ -99,14 +107,16 @@ thousands in a 6-digit amount, and that filter lives in `humanize`.
 
 ```python
 LOGIN_URL = "login"
-LOGIN_REDIRECT_URL = "balances"
+LOGIN_REDIRECT_URL = "home"   # the project now lands you on the app picker at /
 LOGOUT_REDIRECT_URL = "login"
 ```
 
 `LOGIN_URL` is what `LoginRequiredMixin` sends anonymous users to.
 `LOGIN_REDIRECT_URL` is where a successful login goes *if* there was no
 `?next=` param. `LOGOUT_REDIRECT_URL` is where `LogoutView` sends people
-once signed out.
+once signed out. (In the shipped code the URLs are namespaced — Dong's
+patterns live under `dong:`, so balances is `reverse_lazy("dong:balances")`
+— but the setting names work the same.)
 
 **Messages.** `django.contrib.messages` needs its app, its middleware, and
 its context processor — all three are in Django's default `startproject`
@@ -432,7 +442,7 @@ class AddRecordView(FlatErrorMixin, LoginRequiredMixin, CreateView):
     model = Payment
     fields = ["receiver", "amount", "date", "note"]
     template_name = "add_record.html"
-    success_url = reverse_lazy("balances")
+    success_url = reverse_lazy("dong:balances")
 
     def form_valid(self, form):
         form.instance.sender = self.request.user
@@ -596,13 +606,14 @@ template, not when you build the queryset — is probably the single most
 common Django performance bug, and it's invisible until you look at the
 query log or the debug toolbar.
 
-`records.html`'s filter form currently POSTs. That's what you asked for
-originally and it works fine — the tradeoff is the URL never reflects the
-current filter, so it can't be bookmarked or shared. If that ever bothers
-you, the fix is small: change the form's `method` to `"get"`, drop its
-`{% csrf_token %}` (GET requests don't carry one), and read
-`request.GET` instead of `request.POST` in the view. The field names
-don't change either way.
+`records.html`'s filter form now uses **GET**, not POST — the shipped
+`RecordsView` reads `request.GET` and paginates 25 rows per page, so
+filtered views are bookmarkable and shareable by URL. That's the state the
+guide originally suggested as a future option; it's what's deployed now.
+(And if that ever bothers you in reverse, the change is small: switch the
+form's `method` back to `"post"`, re-add the `{% csrf_token %}`, and read
+`request.POST` instead of `request.GET`. The field names don't change
+either way.)
 
 ---
 

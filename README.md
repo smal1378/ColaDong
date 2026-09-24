@@ -37,10 +37,10 @@ cd ColaDong
 uv run python manage.py runserver
 ```
 
-Then open http://127.0.0.1:8000/ — the homepage lists all apps. Log in,
-then pick an app:
+Then open http://127.0.0.1:8000/ — log in, and the homepage lists all
+apps. Each app is namespaced under its own path:
 
-- `/dong/` — Balances (default)
+- `/dong/` — Balances (default after add-record/group-buy)
 - `/ejlas/` — Week board
 - `/ip/` — IP Calculator
 
@@ -57,25 +57,31 @@ with no server-side logic to test.
 ## Layout
 
 ```
-ColaDong/                  project package (settings, urls)
-ColaDong/Dong/             shared ledger app
-  models.py                Payment, GroupPurchase
-  services.py              compute_balances, split_amount, settle_up, monthly_stats
-  forms.py                 PaymentForm, RecordFilterForm, GroupBuyForm
-  views.py                 Balances, AddRecord, Records, RecordsCsv, GroupBuy
-  tests.py                 54 tests
-  admin.py
-ColaDong/Ejlas/            meeting planner app
-  models.py                Meeting
-  services.py              times_overlap, find_conflicts, find_week_conflicts
-  forms.py                 MeetingForm
-  views.py                 WeekBoardView, AddMeetingView
-  tests.py                 9 tests
-  admin.py
-ColaDong/ipcalc/           subnet calculator (stateless, client-side JS)
-  views.py                 CalculatorView
-ColaDong/templates/        shared + per-app templates, all extend base.html
-ColaDong/static/css/coladong.css    the whole design system
+ColaDong/                  repo root (git lives here)
+  ColaDong/                Django project dir (manage.py is here)
+    ColaDong/              settings, project urls, wsgi/asgi
+    Dong/                  shared ledger app
+      models.py            Payment, GroupPurchase
+      services.py          compute_balances, split_amount, settle_up, monthly_stats
+      forms.py             PaymentForm, RecordFilterForm, GroupBuyForm
+      views.py             Balances, AddRecord, Records, RecordsCsv, GroupBuy
+      tests.py             54 tests
+      static/css/          coladong.css — the shared design system (all apps)
+    Ejlas/                 meeting planner app
+      models.py            Meeting
+      services.py          times_overlap, find_conflicts, find_week_conflicts
+      forms.py             MeetingForm
+      views.py             WeekBoardView, AddMeetingView
+      tests.py             9 tests
+    ipcalc/                subnet calculator (stateless, client-side JS)
+      views.py             CalculatorView
+    templates/             base, home, login + per-app templates (balances,
+                           records, add_record, group_buy, ejlas/, ipcalc/)
+   deploy/                  install.sh, update.sh (Ubuntu 22.04)
+   CONTEXT.md               agent auto-load hook (hard rules + pointer)
+   README_UI.md             frontend handoff contract (context variables)
+   BACKEND_GUIDE.md         teaching walkthrough of the Dong backend
+   agent/                   agent working memory (domain, decisions, plan, etc.)
 ```
 
 ## Deploy (Ubuntu 22.04)
@@ -98,14 +104,14 @@ file and systemd restarts it.
 
 ## Docs
 
-- **`CONTEXT.md`** — why the project is shaped the way it is: the domain
-  rules, the visual language, the trust model, deferred scope.
-- **`BACKEND_GUIDE.md`** — a teaching walkthrough of how each piece of the
-  backend works (constraints, CBVs, aggregation, transactions, the
-  largest-remainder rounding algorithm).
+- **`CONTEXT.md`** — agent auto-load hook: hard rules and a pointer to
+  `agent/INDEX.md` for the full working-memory set.
 - **`README_UI.md`** — the frontend handoff contract: exactly which context
-  variables and POST fields each template expects.
-- **`Decisions.md`** — implementation decisions made while building the
-  backend, and the reasoning behind each.
-- **`AgentStartHere.md`** — cold-start handoff for AI agents: environment
-  specifics, conventions, the `RETURN.txt` sync flag protocol.
+  variables and POST/GET field names each template expects.
+- **`BACKEND_GUIDE.md`** — a teaching walkthrough of how the Dong backend
+  was built (constraints, CBVs, aggregation, transactions, the
+  largest-remainder rounding algorithm).
+- **`agent/`** — agent working memory: domain rules (`DOMAIN.md`),
+  implementation decisions (`DECISIONS.md`), history (`HISTORY.md`),
+  active plan (`PLAN.md`), deferred work (`BACKLOG.md`), and the
+  loop-safe protocol (`STRATEGY.md`).
